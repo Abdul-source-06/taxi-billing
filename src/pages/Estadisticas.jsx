@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns'
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { TrendingUp, Calendar, BarChart2 } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 
 export default function Estadisticas() {
   const [stats, setStats] = useState({
@@ -12,6 +13,9 @@ export default function Estadisticas() {
   })
   const [mejorDia, setMejorDia] = useState(null)
   const [mediaDiaria, setMediaDiaria] = useState(0)
+  const [datosSemana, setDatosSemana] = useState([])
+  const [datosMes, setDatosMes] = useState([])
+  const [vistaGrafica, setVistaGrafica] = useState('semana')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -22,31 +26,31 @@ export default function Estadisticas() {
     setLoading(true)
     const hoy = new Date()
 
-    const inicioSemana = format(startOfWeek(hoy, { weekStartsOn: 1 }), 'yyyy-MM-dd')
-    const finSemana = format(endOfWeek(hoy, { weekStartsOn: 1 }), 'yyyy-MM-dd')
-    const inicioMes = format(startOfMonth(hoy), 'yyyy-MM-dd')
-    const finMes = format(endOfMonth(hoy), 'yyyy-MM-dd')
+    const inicioSemana = startOfWeek(hoy, { weekStartsOn: 1 })
+    const finSemana = endOfWeek(hoy, { weekStartsOn: 1 })
+    const inicioMes = startOfMonth(hoy)
+    const finMes = endOfMonth(hoy)
     const hoyStr = format(hoy, 'yyyy-MM-dd')
+    const inicioSemanaStr = format(inicioSemana, 'yyyy-MM-dd')
+    const finSemanaStr = format(finSemana, 'yyyy-MM-dd')
+    const inicioMesStr = format(inicioMes, 'yyyy-MM-dd')
+    const finMesStr = format(finMes, 'yyyy-MM-dd')
 
     const { data } = await supabase
       .from('registros')
       .select('fecha, importe')
-      .gte('fecha', inicioMes)
-      .lte('fecha', finMes)
+      .gte('fecha', inicioMesStr)
+      .lte('fecha', finMesStr)
 
     if (data) {
-      // Stats de hoy
       const registrosHoy = data.filter(r => r.fecha === hoyStr)
       const totalHoy = registrosHoy.reduce((acc, r) => acc + parseFloat(r.importe), 0)
 
-      // Stats de la semana
-      const registrosSemana = data.filter(r => r.fecha >= inicioSemana && r.fecha <= finSemana)
+      const registrosSemana = data.filter(r => r.fecha >= inicioSemanaStr && r.fecha <= finSemanaStr)
       const totalSemana = registrosSemana.reduce((acc, r) => acc + parseFloat(r.importe), 0)
 
-      // Stats del mes
       const totalMes = data.reduce((acc, r) => acc + parseFloat(r.importe), 0)
 
-      // Mejor día
       const porDia = data.reduce((acc, r) => {
         if (!acc[r.fecha]) acc[r.fecha] = 0
         acc[r.fecha] += parseFloat(r.importe)
@@ -58,7 +62,6 @@ export default function Estadisticas() {
         setMejorDia({ fecha: diasOrdenados[0][0], total: diasOrdenados[0][1] })
       }
 
-      // Media diaria
       const numDias = Object.keys(porDia).length
       setMediaDiaria(numDias > 0 ? totalMes / numDias : 0)
 
@@ -67,11 +70,33 @@ export default function Estadisticas() {
         semana: { total: totalSemana, servicios: registrosSemana.length },
         mes: { total: totalMes, servicios: data.length },
       })
+
+      // Datos gráfica semanal
+      const diasSemana = eachDayOfInterval({ start: inicioSemana, end: finSemana })
+      setDatosSemana(diasSemana.map(dia => {
+        const diaStr = format(dia, 'yyyy-MM-dd')
+        return {
+          nombre: format(dia, 'EEE', { locale: es }),
+          total: porDia[diaStr] || 0
+        }
+      }))
+
+      // Datos gráfica mensual
+      const diasMes = eachDayOfInterval({ start: inicioMes, end: finMes })
+      setDatosMes(diasMes.map(dia => {
+        const diaStr = format(dia, 'yyyy-MM-dd')
+        return {
+          nombre: format(dia, 'd'),
+          total: porDia[diaStr] || 0
+        }
+      }))
     }
     setLoading(false)
   }
 
   if (loading) return <p className="text-center text-gray-400 mt-8">Cargando...</p>
+
+  const datosGrafica = vistaGrafica === 'semana' ? datosSemana : datosMes
 
   return (
     <div className="p-4 max-w-lg mx-auto space-y-4">
@@ -98,33 +123,64 @@ export default function Estadisticas() {
         </div>
       </div>
 
+      {/* Gráfica */}
+      <div className="bg-white rounded-2xl p-4 shadow">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-gray-700">Facturación</h3>
+          <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+            <button
+              onClick={() => setVistaGrafica('semana')}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition
+                ${vistaGrafica === 'semana' ? 'bg-yellow-400 text-yellow-900' : 'text-gray-500'}`}
+            >
+              Semana
+            </button>
+            <button
+              onClick={() => setVistaGrafica('mes')}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition
+                ${vistaGrafica === 'mes' ? 'bg-yellow-400 text-yellow-900' : 'text-gray-500'}`}
+            >
+              Mes
+            </button>
+          </div>
+        </div>
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={datosGrafica} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <XAxis dataKey="nombre" tick={{ fontSize: 11, fill: '#9ca3af' }} />
+            <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} />
+            <Tooltip
+              formatter={(value) => [`${value.toFixed(2)} €`, 'Total']}
+              contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+            />
+            <Bar dataKey="total" fill="#facc15" radius={[6, 6, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
       {/* Media diaria */}
-      <div className="bg-white rounded-2xl p-4 shadow flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="bg-yellow-100 p-2 rounded-xl">
-            <TrendingUp size={20} className="text-yellow-600" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Media diaria</p>
-            <p className="font-black text-gray-800 text-2xl">{mediaDiaria.toFixed(2)} €</p>
-          </div>
+      <div className="bg-white rounded-2xl p-4 shadow flex items-center gap-3">
+        <div className="bg-yellow-100 p-2 rounded-xl">
+          <TrendingUp size={20} className="text-yellow-600" />
+        </div>
+        <div>
+          <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Media diaria este mes</p>
+          <p className="font-black text-gray-800 text-2xl">{mediaDiaria.toFixed(2)} €</p>
         </div>
       </div>
 
       {/* Mejor día */}
       {mejorDia && (
-        <div className="bg-white rounded-2xl p-4 shadow flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="bg-green-100 p-2 rounded-xl">
-              <Calendar size={20} className="text-green-600" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Mejor día del mes</p>
-              <p className="font-bold text-gray-800 capitalize">
-                {format(new Date(mejorDia.fecha + 'T00:00:00'), "EEEE d 'de' MMMM", { locale: es })}
-              </p>
-              <p className="font-black text-green-500 text-xl">{mejorDia.total.toFixed(2)} €</p>
-            </div>
+        <div className="bg-white rounded-2xl p-4 shadow flex items-center gap-3">
+          <div className="bg-green-100 p-2 rounded-xl">
+            <Calendar size={20} className="text-green-600" />
+          </div>
+          <div>
+            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Mejor día del mes</p>
+            <p className="font-bold text-gray-800 capitalize">
+              {format(new Date(mejorDia.fecha + 'T00:00:00'), "EEEE d 'de' MMMM", { locale: es })}
+            </p>
+            <p className="font-black text-green-500 text-xl">{mejorDia.total.toFixed(2)} €</p>
           </div>
         </div>
       )}
