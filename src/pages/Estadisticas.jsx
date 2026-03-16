@@ -3,7 +3,40 @@ import { supabase } from '../lib/supabase'
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { TrendingUp, Calendar, BarChart2 } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+
+function GraficaBarras({ datos, color = '#facc15' }) {
+  const maxValor = Math.max(...datos.map(d => d.total), 1)
+  return (
+    <div className="w-full">
+      <div className="flex items-end gap-1 w-full" style={{ height: '160px' }}>
+        {datos.map((d, i) => (
+          <div key={i} className="flex-1 flex flex-col items-center justify-end" style={{ height: '100%' }}>
+            {d.total > 0 && (
+              <span style={{ fontSize: '9px' }} className="text-gray-400 mb-1">
+                {d.total.toFixed(0)}€
+              </span>
+            )}
+            <div
+              style={{
+                width: '100%',
+                height: `${Math.max((d.total / maxValor) * 130, d.total > 0 ? 4 : 0)}px`,
+                backgroundColor: color,
+                borderRadius: '6px 6px 0 0',
+              }}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-1 w-full mt-1">
+        {datos.map((d, i) => (
+          <div key={i} className="flex-1 text-center">
+            <span style={{ fontSize: '10px' }} className="text-gray-400 capitalize">{d.nombre}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export default function Estadisticas() {
   const [stats, setStats] = useState({
@@ -71,36 +104,26 @@ export default function Estadisticas() {
         mes: { total: totalMes, servicios: data.length },
       })
 
-      // Datos gráfica semanal
       const diasSemana = eachDayOfInterval({ start: inicioSemana, end: finSemana })
-      setDatosSemana(diasSemana.map(dia => {
-        const diaStr = format(dia, 'yyyy-MM-dd')
-        return {
-          nombre: format(dia, 'EEE', { locale: es }),
-          total: porDia[diaStr] || 0
-        }
-      }))
+      setDatosSemana(diasSemana.map(dia => ({
+        nombre: format(dia, 'EEE', { locale: es }),
+        total: porDia[format(dia, 'yyyy-MM-dd')] || 0
+      })))
 
-      // Datos gráfica mensual
       const diasMes = eachDayOfInterval({ start: inicioMes, end: finMes })
-      setDatosMes(diasMes.map(dia => {
-        const diaStr = format(dia, 'yyyy-MM-dd')
-        return {
-          nombre: format(dia, 'd'),
-          total: porDia[diaStr] || 0
-        }
-      }))
+      setDatosMes(diasMes.map(dia => ({
+        nombre: format(dia, 'd'),
+        total: porDia[format(dia, 'yyyy-MM-dd')] || 0
+      })))
     }
     setLoading(false)
   }
 
   if (loading) return <p className="text-center text-gray-400 mt-8">Cargando...</p>
 
-  const datosGrafica = vistaGrafica === 'semana' ? datosSemana : datosMes
-
   return (
     <div className="p-4 max-w-lg mx-auto space-y-4">
-      <h2 className="font-bold text-gray-800 text-xl flex items-center gap-2">
+      <h2 className="font-bold text-gray-800 dark:text-gray-100 text-xl flex items-center gap-2">
         <BarChart2 size={22} /> Estadísticas
       </h2>
 
@@ -111,73 +134,58 @@ export default function Estadisticas() {
           <p className="text-yellow-900 font-black text-xl mt-1">{stats.hoy.total.toFixed(2)}€</p>
           <p className="text-yellow-800 text-xs">{stats.hoy.servicios} serv.</p>
         </div>
-        <div className="bg-white rounded-2xl p-3 text-center shadow">
-          <p className="text-gray-500 text-xs font-semibold uppercase tracking-wide">Semana</p>
-          <p className="text-gray-800 font-black text-xl mt-1">{stats.semana.total.toFixed(2)}€</p>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-3 text-center shadow">
+          <p className="text-gray-500 dark:text-gray-400 text-xs font-semibold uppercase tracking-wide">Semana</p>
+          <p className="text-gray-800 dark:text-white font-black text-xl mt-1">{stats.semana.total.toFixed(2)}€</p>
           <p className="text-gray-400 text-xs">{stats.semana.servicios} serv.</p>
         </div>
-        <div className="bg-white rounded-2xl p-3 text-center shadow">
-          <p className="text-gray-500 text-xs font-semibold uppercase tracking-wide">Mes</p>
-          <p className="text-gray-800 font-black text-xl mt-1">{stats.mes.total.toFixed(2)}€</p>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-3 text-center shadow">
+          <p className="text-gray-500 dark:text-gray-400 text-xs font-semibold uppercase tracking-wide">Mes</p>
+          <p className="text-gray-800 dark:text-white font-black text-xl mt-1">{stats.mes.total.toFixed(2)}€</p>
           <p className="text-gray-400 text-xs">{stats.mes.servicios} serv.</p>
         </div>
       </div>
 
       {/* Gráfica */}
-      <div className="bg-white rounded-2xl p-4 shadow">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-gray-700">Facturación</h3>
-          <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
-            <button
-              onClick={() => setVistaGrafica('semana')}
+          <h3 className="font-bold text-gray-700 dark:text-gray-200">Facturación</h3>
+          <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded-xl p-1">
+            <button onClick={() => setVistaGrafica('semana')}
               className={`px-3 py-1 rounded-lg text-xs font-semibold transition
-                ${vistaGrafica === 'semana' ? 'bg-yellow-400 text-yellow-900' : 'text-gray-500'}`}
-            >
+                ${vistaGrafica === 'semana' ? 'bg-yellow-400 text-yellow-900' : 'text-gray-500 dark:text-gray-400'}`}>
               Semana
             </button>
-            <button
-              onClick={() => setVistaGrafica('mes')}
+            <button onClick={() => setVistaGrafica('mes')}
               className={`px-3 py-1 rounded-lg text-xs font-semibold transition
-                ${vistaGrafica === 'mes' ? 'bg-yellow-400 text-yellow-900' : 'text-gray-500'}`}
-            >
+                ${vistaGrafica === 'mes' ? 'bg-yellow-400 text-yellow-900' : 'text-gray-500 dark:text-gray-400'}`}>
               Mes
             </button>
           </div>
         </div>
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={datosGrafica} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-            <XAxis dataKey="nombre" tick={{ fontSize: 11, fill: '#9ca3af' }} />
-            <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} />
-            <Tooltip
-              formatter={(value) => [`${value.toFixed(2)} €`, 'Total']}
-              contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-            />
-            <Bar dataKey="total" fill="#facc15" radius={[6, 6, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        <GraficaBarras datos={vistaGrafica === 'semana' ? datosSemana : datosMes} />
       </div>
 
       {/* Media diaria */}
-      <div className="bg-white rounded-2xl p-4 shadow flex items-center gap-3">
-        <div className="bg-yellow-100 p-2 rounded-xl">
-          <TrendingUp size={20} className="text-yellow-600" />
+      <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow flex items-center gap-3">
+        <div className="bg-yellow-100 dark:bg-yellow-900 p-2 rounded-xl">
+          <TrendingUp size={20} className="text-yellow-600 dark:text-yellow-400" />
         </div>
         <div>
           <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Media diaria este mes</p>
-          <p className="font-black text-gray-800 text-2xl">{mediaDiaria.toFixed(2)} €</p>
+          <p className="font-black text-gray-800 dark:text-white text-2xl">{mediaDiaria.toFixed(2)} €</p>
         </div>
       </div>
 
       {/* Mejor día */}
       {mejorDia && (
-        <div className="bg-white rounded-2xl p-4 shadow flex items-center gap-3">
-          <div className="bg-green-100 p-2 rounded-xl">
-            <Calendar size={20} className="text-green-600" />
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow flex items-center gap-3">
+          <div className="bg-green-100 dark:bg-green-900 p-2 rounded-xl">
+            <Calendar size={20} className="text-green-600 dark:text-green-400" />
           </div>
           <div>
             <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Mejor día del mes</p>
-            <p className="font-bold text-gray-800 capitalize">
+            <p className="font-bold text-gray-800 dark:text-white capitalize">
               {format(new Date(mejorDia.fecha + 'T00:00:00'), "EEEE d 'de' MMMM", { locale: es })}
             </p>
             <p className="font-black text-green-500 text-xl">{mejorDia.total.toFixed(2)} €</p>
