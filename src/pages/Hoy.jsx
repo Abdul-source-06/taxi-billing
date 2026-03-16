@@ -17,7 +17,7 @@ const CONCEPTOS_GASTO = ['Gasolina', 'Parking', 'Peaje', 'Mantenimiento', 'Otros
 export default function Hoy() {
   const [fecha, setFecha] = useState(new Date())
   const {
-    registros, gastos, loading,
+    registros, gastos, loading, online,
     total, totalGastos, beneficioNeto,
     añadirRegistro, editarRegistro, eliminarRegistro,
     añadirGasto, eliminarGasto
@@ -78,6 +78,11 @@ export default function Hoy() {
   return (
     <div className="p-4 max-w-lg mx-auto">
       <Toaster />
+      {!online && (
+  <div className="bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 text-xs font-semibold px-4 py-2 rounded-xl mb-3 text-center">
+    ⚡ Modo offline — Los datos se sincronizarán cuando vuelva la conexión
+  </div>
+)}
 
       {/* Selector de fecha */}
       <div className="flex items-center justify-between mb-4">
