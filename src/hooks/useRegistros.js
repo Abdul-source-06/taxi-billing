@@ -11,18 +11,18 @@ import { sincronizar } from '../lib/sync'
 export function useRegistros(fecha = new Date()) {
   const [registros, setRegistros] = useState([])
   const [gastos, setGastos] = useState([])
+  const [efectivo, setEfectivo] = useState(0)
   const [loading, setLoading] = useState(true)
   const [online, setOnline] = useState(navigator.onLine)
   const fechaStr = format(fecha, 'yyyy-MM-dd')
+  const porcentaje = parseFloat(localStorage.getItem('porcentaje') || '45')
 
   useEffect(() => {
     function handleOnline() {
       setOnline(true)
       sincronizar().then(() => cargarTodo())
     }
-    function handleOffline() {
-      setOnline(false)
-    }
+    function handleOffline() { setOnline(false) }
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
     return () => {
@@ -31,59 +31,66 @@ export function useRegistros(fecha = new Date()) {
     }
   }, [])
 
-  useEffect(() => {
-    cargarTodo()
-  }, [fechaStr])
+  useEffect(() => { cargarTodo() }, [fechaStr])
 
   async function cargarTodo() {
     setLoading(true)
     if (navigator.onLine) {
       try {
-        const [{ data: dataRegistros }, { data: dataGastos }] = await Promise.all([
+        const [{ data: dataRegistros }, { data: dataGastos }, { data: dataEfectivo }] = await Promise.all([
           supabase.from('registros').select('*').eq('fecha', fechaStr).order('hora', { ascending: false }),
-          supabase.from('gastos').select('*').eq('fecha', fechaStr).order('hora', { ascending: false })
+          supabase.from('gastos').select('*').eq('fecha', fechaStr).order('hora', { ascending: false }),
+          supabase.from('efectivo_dia').select('*').eq('fecha', fechaStr).single()
         ])
         const regs = dataRegistros || []
         const gasts = dataGastos || []
-        // Guarda en local para uso offline
         await Promise.all(regs.map(r => guardarRegistroLocal(r)))
         await Promise.all(gasts.map(g => guardarGastoLocal(g)))
         setRegistros(regs)
         setGastos(gasts)
+        setEfectivo(dataEfectivo?.importe || 0)
       } catch {
-        // Si falla, carga desde local
         const regs = await getRegistrosLocal(fechaStr)
         const gasts = await getGastosLocal(fechaStr)
         setRegistros(regs)
         setGastos(gasts)
       }
     } else {
-      // Sin internet, carga desde local
       const regs = await getRegistrosLocal(fechaStr)
       const gasts = await getGastosLocal(fechaStr)
       setRegistros(regs.sort((a, b) => b.hora.localeCompare(a.hora)))
       setGastos(gasts.sort((a, b) => b.hora.localeCompare(a.hora)))
     }
-
-    // Notificación de objetivo
-    const objetivo = localStorage.getItem('objetivoDiario')
-    const notifActivadas = localStorage.getItem('notificaciones') === 'true'
-    if (objetivo && notifActivadas && Notification.permission === 'granted') {
-      const totalActual = registros.reduce((acc, r) => acc + parseFloat(r.importe), 0)
-      const yaNotificado = sessionStorage.getItem(`objetivo_${fechaStr}`)
-      if (totalActual >= parseFloat(objetivo) && !yaNotificado) {
-        new Notification('🚕 TaxiLog — ¡Objetivo alcanzado!', {
-          body: `Has facturado ${totalActual.toFixed(2)} € hoy. ¡Enhorabuena!`,
-        })
-        sessionStorage.setItem(`objetivo_${fechaStr}`, 'true')
-      }
-    }
-
     setLoading(false)
   }
 
-  async function añadirRegistro(importe, tipo, notas = '') {
-    const ahora = new Date()
+  async function guardarEfectivo(importe) {
+    setEfectivo(importe)
+    if (navigator.onLine) {
+      await supabase.from('efectivo_dia').upsert({ fecha: fechaStr, importe: parseFloat(importe) })
+    }
+  }
+
+async function añadirRegistro(importe, tipo, notas = '', origen = 'taximetro') {
+  const ahora = new Date()
+
+  // Busca si ya existe un registro del mismo origen ese día
+  const existente = registros.find(r => r.origen === origen)
+
+  if (existente) {
+    // Suma al existente
+    const nuevoTotal = parseFloat(existente.importe) + parseFloat(importe)
+    const registroActualizado = { ...existente, importe: nuevoTotal }
+    await guardarRegistroLocal(registroActualizado)
+    setRegistros(prev => prev.map(r => r.id === existente.id ? registroActualizado : r))
+
+    if (navigator.onLine) {
+      await supabase.from('registros').update({ importe: nuevoTotal }).eq('id', existente.id)
+    } else {
+      await añadirPendiente({ tipo: 'editar_registro', datos: { id: existente.id, importe: nuevoTotal, tipo: existente.tipo, notas: existente.notas, origen } })
+    }
+  } else {
+    // Crea uno nuevo si no existe ese origen
     const nuevoRegistro = {
       id: crypto.randomUUID(),
       fecha: fechaStr,
@@ -91,10 +98,9 @@ export function useRegistros(fecha = new Date()) {
       importe: parseFloat(importe),
       tipo,
       notas,
+      origen,
       created_at: new Date().toISOString()
     }
-
-    // Guarda localmente primero
     await guardarRegistroLocal(nuevoRegistro)
     setRegistros(prev => [nuevoRegistro, ...prev])
 
@@ -108,23 +114,22 @@ export function useRegistros(fecha = new Date()) {
       await añadirPendiente({ tipo: 'insertar_registro', datos: nuevoRegistro })
     }
   }
+}
 
-  async function editarRegistro(id, importe, tipo, notas) {
-    const registroActualizado = { ...registros.find(r => r.id === id), importe: parseFloat(importe), tipo, notas }
+  async function editarRegistro(id, importe, tipo, notas, origen) {
+    const registroActualizado = { ...registros.find(r => r.id === id), importe: parseFloat(importe), tipo, notas, origen }
     await guardarRegistroLocal(registroActualizado)
     setRegistros(prev => prev.map(r => r.id === id ? registroActualizado : r))
-
     if (navigator.onLine) {
-      await supabase.from('registros').update({ importe: parseFloat(importe), tipo, notas }).eq('id', id)
+      await supabase.from('registros').update({ importe: parseFloat(importe), tipo, notas, origen }).eq('id', id)
     } else {
-      await añadirPendiente({ tipo: 'editar_registro', datos: { id, importe, tipo, notas } })
+      await añadirPendiente({ tipo: 'editar_registro', datos: { id, importe, tipo, notas, origen } })
     }
   }
 
   async function eliminarRegistro(id) {
     await eliminarRegistroLocal(id)
     setRegistros(prev => prev.filter(r => r.id !== id))
-
     if (navigator.onLine) {
       await supabase.from('registros').delete().eq('id', id)
     } else {
@@ -142,10 +147,8 @@ export function useRegistros(fecha = new Date()) {
       concepto,
       created_at: new Date().toISOString()
     }
-
     await guardarGastoLocal(nuevoGasto)
     setGastos(prev => [nuevoGasto, ...prev])
-
     if (navigator.onLine) {
       const { data } = await supabase.from('gastos').insert([nuevoGasto]).select()
       if (data) {
@@ -160,7 +163,6 @@ export function useRegistros(fecha = new Date()) {
   async function eliminarGasto(id) {
     await eliminarGastoLocal(id)
     setGastos(prev => prev.filter(g => g.id !== id))
-
     if (navigator.onLine) {
       await supabase.from('gastos').delete().eq('id', id)
     } else {
@@ -171,11 +173,17 @@ export function useRegistros(fecha = new Date()) {
   const totalIngresos = registros.reduce((acc, r) => acc + parseFloat(r.importe), 0)
   const totalGastos = gastos.reduce((acc, g) => acc + parseFloat(g.importe), 0)
   const beneficioNeto = totalIngresos - totalGastos
+  const tuParte = totalIngresos * (porcentaje / 100)
+  const totalTaximetro = registros.filter(r => r.origen === 'taximetro').reduce((acc, r) => acc + parseFloat(r.importe), 0)
+  const totalFreeNow = registros.filter(r => r.origen === 'freenow').reduce((acc, r) => acc + parseFloat(r.importe), 0)
+  const totalUber = registros.filter(r => r.origen === 'uber').reduce((acc, r) => acc + parseFloat(r.importe), 0)
 
   return {
     registros, gastos, loading, online,
     total: totalIngresos, totalGastos, beneficioNeto,
+    tuParte, porcentaje, efectivo,
+    totalTaximetro, totalFreeNow, totalUber,
     añadirRegistro, editarRegistro, eliminarRegistro,
-    añadirGasto, eliminarGasto
+    añadirGasto, eliminarGasto, guardarEfectivo
   }
 }
