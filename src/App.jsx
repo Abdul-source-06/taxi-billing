@@ -26,9 +26,9 @@ function AppContent() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-28 transition-colors duration-300">
       <Toaster />
       <header
-        className="bg-yellow-400 dark:bg-yellow-500 px-4 flex items-center justify-between shadow"
+        className="bg-yellow-400 dark:bg-yellow-500 px-4 flex items-center justify-between shadow sticky top-0 z-50"
         style={{
-          paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)',
+          paddingTop: 'max(env(safe-area-inset-top), 16px)',
           paddingBottom: '16px'
         }}>
         <div className="flex items-center gap-2">
