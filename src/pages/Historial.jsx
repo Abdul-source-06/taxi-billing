@@ -7,9 +7,9 @@ import toast, { Toaster } from 'react-hot-toast'
 import { useSwipeable } from 'react-swipeable'
 
 const ORIGENES = [
-  { id: 'taximetro', label: 'Taxímetro', emoji: '🚕' },
-  { id: 'freenow', label: 'FreeNow', emoji: '🔴' },
-  { id: 'uber', label: 'Uber', emoji: '⚫' },
+  { id: 'taximetro', label: 'Taxímetro', emoji: '🚕', bg: '#fde68a', color: '#78350f', bgModal: '#facc15', colorModal: '#78350f' },
+  { id: 'freenow', label: 'FreeNow', emoji: '🔴', bg: '#fecdd3', color: '#be123c', bgModal: '#ef4444', colorModal: '#ffffff' },
+  { id: 'uber', label: 'Uber', emoji: '⚫', bg: '#9da4b1', color: '#1f2937', bgModal: '#374151', colorModal: '#ffffff' },
 ]
 
 const TIPOS = [
@@ -30,7 +30,6 @@ function FilaDia({ dia, porcentaje, diaExpandido, onExpandir, onBorrar, children
 
   return (
     <div className="relative overflow-hidden rounded-2xl">
-      {/* Fondo rojo de borrar */}
       <div className="absolute inset-0 bg-red-500 flex items-center justify-end px-6 rounded-2xl">
         <button onClick={() => onBorrar(dia.fecha)}
           className="text-white font-bold text-sm flex flex-col items-center gap-1">
@@ -39,7 +38,6 @@ function FilaDia({ dia, porcentaje, diaExpandido, onExpandir, onBorrar, children
         </button>
       </div>
 
-      {/* Contenido deslizable */}
       <div {...handlers}
         className="relative bg-white dark:bg-gray-800 rounded-2xl shadow transition-transform duration-300"
         style={{ transform: deslizado ? 'translateX(-80px)' : 'translateX(0)' }}>
@@ -55,6 +53,7 @@ function FilaDia({ dia, porcentaje, diaExpandido, onExpandir, onBorrar, children
               {dia.taximetro > 0 && <span className="text-xs text-gray-400">🚕 {dia.taximetro.toFixed(2)}€</span>}
               {dia.freenow > 0 && <span className="text-xs text-gray-400">🔴 {dia.freenow.toFixed(2)}€</span>}
               {dia.uber > 0 && <span className="text-xs text-gray-400">⚫ {dia.uber.toFixed(2)}€</span>}
+              {dia.efectivo > 0 && <span className="text-xs text-green-500">💵 {dia.efectivo.toFixed(2)}€</span>}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -78,18 +77,22 @@ export default function Historial() {
   const [fechaRef, setFechaRef] = useState(new Date())
   const [diaExpandido, setDiaExpandido] = useState(null)
   const [registrosDia, setRegistrosDia] = useState([])
+  const [efectivoDia, setEfectivoDia] = useState(0)
   const [loadingDia, setLoadingDia] = useState(false)
   const [editandoRegistro, setEditandoRegistro] = useState(null)
   const [editImporte, setEditImporte] = useState('')
   const [editTipo, setEditTipo] = useState('servicio')
   const [editOrigen, setEditOrigen] = useState('taximetro')
   const [editNotas, setEditNotas] = useState('')
-  const [añadiendoEnDia, setAñadiendoEnDia] = useState(null)
-  const [nuevoImporte, setNuevoImporte] = useState('')
-  const [nuevoTipo, setNuevoTipo] = useState('servicio')
-  const [nuevoOrigen, setNuevoOrigen] = useState('taximetro')
-  const [nuevoNotas, setNuevoNotas] = useState('')
-  const [guardandoNuevo, setGuardandoNuevo] = useState(false)
+  const [añadiendoEfectivo, setAñadiendoEfectivo] = useState(false)
+  const [nuevoEfectivo, setNuevoEfectivo] = useState('')
+  const [guardandoEfectivo, setGuardandoEfectivo] = useState(false)
+  const [editandoEfectivo, setEditandoEfectivo] = useState(false)
+  const [editEfectivoImporte, setEditEfectivoImporte] = useState('')
+  const [modalOrigen, setModalOrigen] = useState(null) // { fecha, origenId, importe }
+  const [modalOrigenValor, setModalOrigenValor] = useState('')
+  const [modalOrigenOperacion, setModalOrigenOperacion] = useState('sumar')
+  const [guardandoOrigen, setGuardandoOrigen] = useState(false)
   const porcentaje = parseFloat(localStorage.getItem('porcentaje') || '45')
 
   useEffect(() => {
@@ -103,16 +106,14 @@ export default function Historial() {
     const inicio = format(startOfMonth(fechaRef), 'yyyy-MM-dd')
     const fin = format(endOfMonth(fechaRef), 'yyyy-MM-dd')
 
-    const { data } = await supabase
-      .from('registros')
-      .select('fecha, importe, origen')
-      .gte('fecha', inicio)
-      .lte('fecha', fin)
-      .order('fecha', { ascending: false })
+    const [{ data }, { data: dataEfectivo }] = await Promise.all([
+      supabase.from('registros').select('fecha, importe, origen').gte('fecha', inicio).lte('fecha', fin).order('fecha', { ascending: false }),
+      supabase.from('efectivo_dia').select('fecha, importe').gte('fecha', inicio).lte('fecha', fin)
+    ])
 
     if (data) {
       const agrupado = data.reduce((acc, r) => {
-        if (!acc[r.fecha]) acc[r.fecha] = { fecha: r.fecha, total: 0, servicios: 0, taximetro: 0, freenow: 0, uber: 0 }
+        if (!acc[r.fecha]) acc[r.fecha] = { fecha: r.fecha, total: 0, servicios: 0, taximetro: 0, freenow: 0, uber: 0, efectivo: 0 }
         acc[r.fecha].total += parseFloat(r.importe)
         acc[r.fecha].servicios += 1
         if (r.origen === 'freenow') acc[r.fecha].freenow += parseFloat(r.importe)
@@ -120,6 +121,13 @@ export default function Historial() {
         else acc[r.fecha].taximetro += parseFloat(r.importe)
         return acc
       }, {})
+
+      if (dataEfectivo) {
+        dataEfectivo.forEach(e => {
+          if (agrupado[e.fecha]) agrupado[e.fecha].efectivo = parseFloat(e.importe)
+        })
+      }
+
       setDias(Object.values(agrupado).sort((a, b) => b.fecha.localeCompare(a.fecha)))
     }
     setLoading(false)
@@ -129,18 +137,78 @@ export default function Historial() {
     if (diaExpandido === fecha) {
       setDiaExpandido(null)
       setEditandoRegistro(null)
+      setEfectivoDia(0)
       return
     }
     setDiaExpandido(fecha)
     setEditandoRegistro(null)
+    setAñadiendoEfectivo(false)
     setLoadingDia(true)
-    const { data } = await supabase
-      .from('registros')
-      .select('*')
-      .eq('fecha', fecha)
-      .order('hora', { ascending: false })
+
+    const [{ data }, { data: dataEfectivo }] = await Promise.all([
+      supabase.from('registros').select('*').eq('fecha', fecha).order('hora', { ascending: false }),
+      supabase.from('efectivo_dia').select('*').eq('fecha', fecha).limit(1)
+    ])
+
     setRegistrosDia(data || [])
+    setEfectivoDia(dataEfectivo?.[0]?.importe || 0)
     setLoadingDia(false)
+  }
+
+  async function guardarEfectivoDia(fecha) {
+    if (!nuevoEfectivo || isNaN(nuevoEfectivo)) return
+    setGuardandoEfectivo(true)
+    const nuevoTotal = efectivoDia + parseFloat(nuevoEfectivo)
+    await supabase.from('efectivo_dia').upsert({ fecha, importe: nuevoTotal }, { onConflict: 'fecha' })
+    setEfectivoDia(nuevoTotal)
+    await cargarHistorial()
+    toast.success(`Efectivo guardado — Total: ${nuevoTotal.toFixed(2)} €`)
+    setNuevoEfectivo('')
+    setAñadiendoEfectivo(false)
+    setGuardandoEfectivo(false)
+  }
+
+  async function editarEfectivoDia(fecha, importe) {
+    await supabase.from('efectivo_dia').upsert({ fecha, importe: parseFloat(importe) }, { onConflict: 'fecha' })
+    setEfectivoDia(parseFloat(importe))
+    await cargarHistorial()
+    toast.success('Efectivo actualizado')
+  }
+
+  async function guardarModalOrigen() {
+    if (!modalOrigenValor || isNaN(modalOrigenValor)) return
+    setGuardandoOrigen(true)
+
+    const { fecha, origenId, importe } = modalOrigen
+    const valor = parseFloat(modalOrigenValor)
+    const nuevoTotal = modalOrigenOperacion === 'sumar'
+      ? importe + valor
+      : Math.max(0, importe - valor)
+
+    const registroExistente = registrosDia.find(r => r.origen === origenId)
+
+    if (registroExistente) {
+      await supabase.from('registros').update({ importe: nuevoTotal }).eq('id', registroExistente.id)
+      setRegistrosDia(prev => prev.map(r => r.id === registroExistente.id ? { ...r, importe: nuevoTotal } : r))
+    } else if (modalOrigenOperacion === 'sumar') {
+      const { data } = await supabase.from('registros').insert([{
+        id: crypto.randomUUID(),
+        fecha,
+        hora: format(new Date(), 'HH:mm:ss'),
+        importe: nuevoTotal,
+        tipo: 'servicio',
+        origen: origenId,
+        notas: '',
+      }]).select()
+      if (data) setRegistrosDia(prev => [data[0], ...prev])
+    }
+
+    await cargarHistorial()
+    const origenLabel = ORIGENES.find(o => o.id === origenId)?.label
+    toast.success(`${origenLabel} actualizado — Total: ${nuevoTotal.toFixed(2)} €`)
+    setModalOrigenValor('')
+    setModalOrigen(null)
+    setGuardandoOrigen(false)
   }
 
   function iniciarEdicion(r) {
@@ -184,43 +252,6 @@ export default function Historial() {
     toast.success('Día eliminado')
   }
 
-  async function añadirServicioDia(fecha) {
-    if (!nuevoImporte || isNaN(nuevoImporte)) return
-    setGuardandoNuevo(true)
-
-    const existente = registrosDia.find(r => r.origen === nuevoOrigen)
-
-    if (existente) {
-      const nuevoTotal = parseFloat(existente.importe) + parseFloat(nuevoImporte)
-      await supabase.from('registros').update({ importe: nuevoTotal }).eq('id', existente.id)
-      setRegistrosDia(prev => prev.map(r => r.id === existente.id
-        ? { ...r, importe: nuevoTotal }
-        : r
-      ))
-      toast.success(`Sumado a ${ORIGENES.find(o => o.id === nuevoOrigen)?.label}`)
-    } else {
-      const { data } = await supabase.from('registros').insert([{
-        id: crypto.randomUUID(),
-        fecha,
-        hora: format(new Date(), 'HH:mm:ss'),
-        importe: parseFloat(nuevoImporte),
-        tipo: nuevoTipo,
-        origen: nuevoOrigen,
-        notas: nuevoNotas,
-      }]).select()
-      if (data) setRegistrosDia(prev => [data[0], ...prev])
-      toast.success('Servicio añadido')
-    }
-
-    await cargarHistorial()
-    setNuevoImporte('')
-    setNuevoNotas('')
-    setNuevoOrigen('taximetro')
-    setNuevoTipo('servicio')
-    setAñadiendoEnDia(null)
-    setGuardandoNuevo(false)
-  }
-
   const esActual = format(fechaRef, 'yyyy-MM') === format(new Date(), 'yyyy-MM')
   const labelMes = format(fechaRef, 'MMMM yyyy', { locale: es })
   const estiloModal = { backgroundColor: '#ffffff', color: '#111827' }
@@ -246,7 +277,7 @@ export default function Historial() {
 
       {loading && <p className="text-center text-gray-400 mt-8">Cargando...</p>}
 
-      {/* Modal editar */}
+      {/* Modal editar servicio */}
       {editandoRegistro && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
           <div className="rounded-2xl p-5 w-full max-w-lg space-y-3 shadow-2xl" style={estiloModal}>
@@ -255,7 +286,7 @@ export default function Historial() {
               {ORIGENES.map(o => (
                 <button key={o.id} type="button" onClick={() => setEditOrigen(o.id)}
                   className="flex-1 py-2 rounded-xl text-xs font-semibold transition"
-                  style={editOrigen === o.id ? { backgroundColor: '#facc15', color: '#78350f' } : { backgroundColor: '#f3f4f6', color: '#6b7280' }}>
+                  style={editOrigen === o.id ? { backgroundColor: o.bgModal, color: o.colorModal } : { backgroundColor: '#f3f4f6', color: '#6b7280' }}>
                   {o.emoji} {o.label}
                 </button>
               ))}
@@ -302,56 +333,170 @@ export default function Historial() {
         </div>
       )}
 
-      {/* Modal añadir */}
-      {añadiendoEnDia && (
+      {/* Modal origen (sumar/restar) */}
+      {modalOrigen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
           <div className="rounded-2xl p-5 w-full max-w-lg space-y-3 shadow-2xl" style={estiloModal}>
-            <h3 className="font-bold text-lg" style={{ color: '#111827' }}>
-              Añadir servicio — {format(new Date(añadiendoEnDia + 'T00:00:00'), "d 'de' MMMM", { locale: es })}
-            </h3>
-            <div className="flex gap-1">
-              {ORIGENES.map(o => (
-                <button key={o.id} type="button" onClick={() => setNuevoOrigen(o.id)}
-                  className="flex-1 py-2 rounded-xl text-xs font-semibold transition"
-                  style={nuevoOrigen === o.id ? { backgroundColor: '#facc15', color: '#78350f' } : { backgroundColor: '#f3f4f6', color: '#6b7280' }}>
-                  {o.emoji} {o.label}
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-2 items-center pb-1" style={{ borderBottom: '2px solid #facc15' }}>
+            {(() => {
+              const origen = ORIGENES.find(o => o.id === modalOrigen.origenId)
+              return (
+                <>
+                  <h3 className="font-bold text-lg" style={{ color: '#111827' }}>
+                    {origen.emoji} {origen.label}
+                  </h3>
+                  {modalOrigen.importe > 0 && (
+                    <div className="rounded-xl px-4 py-2 flex items-center justify-between" style={{ backgroundColor: origen.bg }}>
+                      <span className="text-sm font-semibold" style={{ color: origen.color }}>Total actual</span>
+                      <span className="font-black text-lg" style={{ color: origen.color }}>{modalOrigen.importe.toFixed(2)} €</span>
+                    </div>
+                  )}
+                  {/* Selector sumar/restar */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setModalOrigenOperacion('sumar')}
+                      className="flex-1 py-2 rounded-xl font-bold text-sm transition"
+                      style={modalOrigenOperacion === 'sumar'
+                        ? { backgroundColor: origen.bgModal, color: origen.colorModal }
+                        : { backgroundColor: '#f3f4f6', color: '#6b7280' }}>
+                      + Sumar
+                    </button>
+                    <button
+                      onClick={() => setModalOrigenOperacion('restar')}
+                      className="flex-1 py-2 rounded-xl font-bold text-sm transition"
+                      style={modalOrigenOperacion === 'restar'
+                        ? { backgroundColor: '#ef4444', color: '#ffffff' }
+                        : { backgroundColor: '#f3f4f6', color: '#6b7280' }}>
+                      − Restar
+                    </button>
+                  </div>
+                  <div className="flex gap-2 items-center pb-1" style={{ borderBottom: `2px solid ${origen.bgModal}` }}>
+                    <span className="font-bold text-xl" style={{ color: '#9ca3af' }}>€</span>
+                    <input type="number" step="0.01" placeholder="0.00" value={modalOrigenValor}
+                      onChange={e => setModalOrigenValor(e.target.value)}
+                      className="flex-1 font-bold text-2xl outline-none"
+                      style={{ backgroundColor: 'transparent', color: '#111827' }} />
+                  </div>
+                  {modalOrigenValor && !isNaN(modalOrigenValor) && (
+                    <div className="rounded-xl px-4 py-2 flex items-center justify-between" style={{ backgroundColor: '#f9fafb' }}>
+                      <span className="text-sm text-gray-500">Nuevo total</span>
+                      <span className="font-black text-lg" style={{ color: origen.color }}>
+                        {(modalOrigenOperacion === 'sumar'
+                          ? modalOrigen.importe + parseFloat(modalOrigenValor)
+                          : Math.max(0, modalOrigen.importe - parseFloat(modalOrigenValor))
+                        ).toFixed(2)} €
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button onClick={guardarModalOrigen}
+                      disabled={guardandoOrigen || !modalOrigenValor}
+                      className="flex-1 font-bold py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50"
+                      style={{ backgroundColor: origen.bgModal, color: origen.colorModal }}>
+                      <Check size={18} /> {guardandoOrigen ? 'Guardando...' : 'Guardar'}
+                    </button>
+                    <button onClick={() => { setModalOrigen(null); setModalOrigenValor('') }}
+                      className="flex-1 font-bold py-3 rounded-xl flex items-center justify-center gap-2"
+                      style={estiloBotonGris}>
+                      <X size={18} /> Cancelar
+                    </button>
+                  </div>
+                </>
+              )
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* Modal añadir efectivo */}
+      {añadiendoEfectivo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
+          <div className="rounded-2xl p-5 w-full max-w-lg space-y-3 shadow-2xl" style={estiloModal}>
+            <h3 className="font-bold text-lg" style={{ color: '#111827' }}>💵 Añadir efectivo</h3>
+            {efectivoDia > 0 && (
+              <div className="rounded-xl px-4 py-2 flex items-center justify-between" style={{ backgroundColor: '#f0fdf4' }}>
+                <span className="text-sm font-semibold" style={{ color: '#15803d' }}>Total acumulado</span>
+                <span className="font-black text-lg" style={{ color: '#15803d' }}>{efectivoDia.toFixed(2)} €</span>
+              </div>
+            )}
+            <div className="flex gap-2 items-center pb-1" style={{ borderBottom: '2px solid #22c55e' }}>
               <span className="font-bold text-xl" style={{ color: '#9ca3af' }}>€</span>
-              <input type="number" step="0.01" placeholder="0.00" value={nuevoImporte}
-                onChange={e => setNuevoImporte(e.target.value)}
+              <input type="number" step="0.01" placeholder="0.00" value={nuevoEfectivo}
+                onChange={e => setNuevoEfectivo(e.target.value)}
                 className="flex-1 font-bold text-2xl outline-none"
                 style={{ backgroundColor: 'transparent', color: '#111827' }} />
             </div>
-            <div className="flex gap-1">
-              {TIPOS.map(t => (
-                <button key={t.id} type="button" onClick={() => setNuevoTipo(t.id)}
-                  className="flex-1 py-2 rounded-xl text-xs font-semibold transition flex flex-col items-center gap-1"
-                  style={nuevoTipo === t.id ? { backgroundColor: '#facc15', color: '#78350f' } : { backgroundColor: '#f3f4f6', color: '#6b7280' }}>
-                  <t.icon size={16} />
-                  {t.label}
-                </button>
-              ))}
-            </div>
-            <input type="text" value={nuevoNotas} onChange={e => setNuevoNotas(e.target.value)}
-              placeholder="Notas (opcional)"
-              className="w-full rounded-xl p-2 text-sm outline-none"
-              style={{ border: '1px solid #e5e7eb', backgroundColor: 'transparent', color: '#111827' }} />
             <div className="flex gap-2">
-              <button onClick={() => añadirServicioDia(añadiendoEnDia)}
-                disabled={guardandoNuevo || !nuevoImporte}
+              <button onClick={() => guardarEfectivoDia(añadiendoEfectivo)}
+                disabled={guardandoEfectivo || !nuevoEfectivo}
                 className="flex-1 font-bold py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50"
-                style={{ backgroundColor: '#facc15', color: '#78350f' }}>
-                <Check size={18} /> {guardandoNuevo ? 'Guardando...' : 'Añadir'}
+                style={{ backgroundColor: '#22c55e', color: '#ffffff' }}>
+                <Check size={18} /> {guardandoEfectivo ? 'Guardando...' : 'Añadir'}
               </button>
-              <button onClick={() => setAñadiendoEnDia(null)}
+              <button onClick={() => { setAñadiendoEfectivo(false); setNuevoEfectivo('') }}
                 className="flex-1 font-bold py-3 rounded-xl flex items-center justify-center gap-2"
                 style={estiloBotonGris}>
                 <X size={18} /> Cancelar
               </button>
             </div>
+            {efectivoDia > 0 && (
+              <button
+                onClick={() => {
+                  setEditEfectivoImporte(efectivoDia.toString())
+                  setEditandoEfectivo(añadiendoEfectivo)
+                  setAñadiendoEfectivo(false)
+                }}
+                className="w-full font-bold py-2 rounded-xl text-sm"
+                style={{ backgroundColor: '#f0fdf4', color: '#15803d' }}>
+                Editar total
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal editar efectivo */}
+      {editandoEfectivo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
+          <div className="rounded-2xl p-5 w-full max-w-lg space-y-3 shadow-2xl" style={estiloModal}>
+            <h3 className="font-bold text-lg" style={{ color: '#111827' }}>✏️ Editar efectivo</h3>
+            <p className="text-xs" style={{ color: '#6b7280' }}>Cambia el total de efectivo recaudado este día</p>
+            <div className="flex gap-2 items-center pb-1" style={{ borderBottom: '2px solid #22c55e' }}>
+              <span className="font-bold text-xl" style={{ color: '#9ca3af' }}>€</span>
+              <input type="number" step="0.01" value={editEfectivoImporte}
+                onChange={e => setEditEfectivoImporte(e.target.value)}
+                className="flex-1 font-bold text-2xl outline-none"
+                style={{ backgroundColor: 'transparent', color: '#111827' }} />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={async () => {
+                  if (!editEfectivoImporte || isNaN(editEfectivoImporte)) return
+                  await editarEfectivoDia(editandoEfectivo, editEfectivoImporte)
+                  setEditandoEfectivo(false)
+                  setEditEfectivoImporte('')
+                }}
+                className="flex-1 font-bold py-3 rounded-xl flex items-center justify-center gap-2"
+                style={{ backgroundColor: '#22c55e', color: '#ffffff' }}>
+                <Check size={18} /> Guardar
+              </button>
+              <button onClick={() => { setEditandoEfectivo(false); setEditEfectivoImporte('') }}
+                className="flex-1 font-bold py-3 rounded-xl flex items-center justify-center gap-2"
+                style={estiloBotonGris}>
+                <X size={18} /> Cancelar
+              </button>
+            </div>
+            <button
+              onClick={async () => {
+                await supabase.from('efectivo_dia').delete().eq('fecha', editandoEfectivo)
+                setEfectivoDia(0)
+                await cargarHistorial()
+                toast.success('Efectivo eliminado')
+                setEditandoEfectivo(false)
+              }}
+              className="w-full font-bold py-2 rounded-xl text-sm"
+              style={estiloBotonRojo}>
+              Eliminar efectivo
+            </button>
           </div>
         </div>
       )}
@@ -373,36 +518,52 @@ export default function Historial() {
                   <p className="text-center text-gray-400 py-4 text-sm">Cargando...</p>
                 ) : (
                   <div className="divide-y divide-gray-50 dark:divide-gray-700">
-                    {registrosDia.map(r => (
-                      <div key={r.id} className="px-4 py-3 flex items-center justify-between">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-black text-gray-800 dark:text-white">{parseFloat(r.importe).toFixed(2)} €</span>
-                            <span className="text-sm">{ORIGENES.find(o => o.id === r.origen)?.emoji || '🚕'}</span>
+
+                    {/* Filas por origen */}
+                    {ORIGENES.map(origen => {
+                      const registro = registrosDia.find(r => r.origen === origen.id)
+                      const importe = registro ? parseFloat(registro.importe) : 0
+                      return (
+                        <div key={origen.id} className="px-4 py-3 flex items-center justify-between"
+                          style={{ backgroundColor: origen.bg }}>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-black" style={{ color: origen.color }}>
+                                {origen.emoji} {importe > 0 ? `${importe.toFixed(2)} €` : 'Sin registros'}
+                              </span>
+                            </div>
+                            <p className="text-xs" style={{ color: origen.color, opacity: 0.7 }}>{origen.label}</p>
                           </div>
-                          <div className="flex gap-2 mt-0.5 flex-wrap">
-                            <span className="text-xs text-gray-400">{r.hora?.slice(0, 5)}</span>
-                            <span className="text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 px-2 rounded-full">{r.tipo}</span>
-                            {r.notas && <span className="text-xs text-gray-400">{r.notas}</span>}
-                          </div>
+                          <button
+                            onClick={() => {
+                              setModalOrigen({ fecha: dia.fecha, origenId: origen.id, importe })
+                              setModalOrigenOperacion('sumar')
+                              setModalOrigenValor('')
+                            }}
+                            className="text-xs font-bold px-3 py-1.5 rounded-xl"
+                            style={{ backgroundColor: origen.bgModal, color: origen.colorModal }}>
+                            {importe > 0 ? '+ Añadir' : 'Añadir'}
+                          </button>
                         </div>
-                        <button onClick={() => iniciarEdicion(r)}
-                          className="text-xs font-bold px-3 py-1.5 rounded-xl transition"
-                          style={{ backgroundColor: '#fefce8', color: '#ca8a04' }}>
-                          Editar
-                        </button>
+                      )
+                    })}
+
+                    {/* Fila de efectivo */}
+                    <div className="px-4 py-3 flex items-center justify-between bg-green-50 dark:bg-green-900">
+                      <div>
+                        <span className="font-black text-green-700 dark:text-green-300">
+                          💵 {efectivoDia > 0 ? `${efectivoDia.toFixed(2)} €` : 'Sin efectivo'}
+                        </span>
+                        <p className="text-xs text-green-600 dark:text-green-400">Efectivo</p>
                       </div>
-                    ))}
-                    {registrosDia.length === 0 && (
-                      <p className="text-center text-gray-400 py-4 text-sm">No hay servicios</p>
-                    )}
-                    <div className="px-4 py-3">
-                      <button onClick={() => setAñadiendoEnDia(dia.fecha)}
-                        className="w-full py-2 rounded-xl text-xs font-bold transition"
-                        style={{ backgroundColor: '#fefce8', color: '#ca8a04' }}>
-                        + Añadir servicio a este día
+                      <button
+                        onClick={() => setAñadiendoEfectivo(dia.fecha)}
+                        className="text-xs font-bold px-3 py-1.5 rounded-xl"
+                        style={{ backgroundColor: '#dcfce7', color: '#15803d' }}>
+                        {efectivoDia > 0 ? '+ Añadir' : 'Añadir'}
                       </button>
                     </div>
+
                   </div>
                 )}
               </div>
