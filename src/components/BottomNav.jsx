@@ -10,8 +10,12 @@ const tabs = [
 
 export default function BottomNav() {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex justify-around z-50 transition-colors duration-300"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom, 12px)', paddingTop: '8px' }}>
+    <nav
+      className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex justify-around z-50 transition-colors duration-300"
+      style={{
+        paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8px)',
+        paddingTop: '8px'
+      }}>
       {tabs.map(({ to, icon: Icon, label }) => (
         <NavLink key={to} to={to} end={to === '/'}
           className={({ isActive }) =>

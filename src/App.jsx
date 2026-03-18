@@ -23,9 +23,14 @@ function AppContent() {
   if (!user) return <Login />
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20 transition-colors duration-300">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-28 transition-colors duration-300">
       <Toaster />
-      <header className="bg-yellow-400 dark:bg-yellow-500 px-4 py-4 flex items-center justify-between shadow">
+      <header
+        className="bg-yellow-400 dark:bg-yellow-500 px-4 flex items-center justify-between shadow"
+        style={{
+          paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)',
+          paddingBottom: '16px'
+        }}>
         <div className="flex items-center gap-2">
           <span className="text-2xl">🚕</span>
           <h1 className="font-black text-yellow-900 text-xl">TaxiLog</h1>
