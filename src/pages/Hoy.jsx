@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRegistros } from '../hooks/useRegistros'
 import { PlusCircle, Car, Plane, MapPin, ChevronLeft, ChevronRight, Wallet } from 'lucide-react'
 import { format, addDays, subDays, isToday } from 'date-fns'
@@ -25,13 +25,18 @@ export default function Hoy() {
 
   const [fecha, setFecha] = useState(() => {
     if (location.state?.fecha) return new Date(location.state.fecha + 'T00:00:00')
-    return new Date()
+    const ahora = new Date()
+    if (ahora.getHours() < 6) {
+      ahora.setDate(ahora.getDate() - 1)
+    }
+    return ahora
   })
 
   const {
     registros, gastos, loading, online,
     total, tuParte, porcentaje,
     totalTaximetro, totalFreeNow, totalUber,
+    efectivo,
     añadirRegistro, añadirGasto, guardarEfectivo
   } = useRegistros(fecha)
 
@@ -73,14 +78,16 @@ export default function Hoy() {
     setGuardandoGasto(false)
   }
 
-  async function handleEfectivo(e) {
-    e.preventDefault()
-    setGuardandoEfectivo(true)
-    await guardarEfectivo(efectivoInput)
-    toast.success('Efectivo guardado')
-    setGuardandoEfectivo(false)
-  }
-
+async function handleEfectivo(e) {
+  e.preventDefault()
+  if (!efectivoInput || isNaN(efectivoInput)) return
+  setGuardandoEfectivo(true)
+  const nuevoTotal = (efectivo || 0) + parseFloat(efectivoInput)
+  await guardarEfectivo(nuevoTotal)
+  toast.success(`Efectivo guardado — Total: ${nuevoTotal.toFixed(2)} €`)
+  setEfectivoInput('')
+  setGuardandoEfectivo(false)
+}
   return (
     <div className="p-4 max-w-lg mx-auto">
       <Toaster />
@@ -224,18 +231,22 @@ export default function Hoy() {
             <h3 className="font-bold text-gray-800 dark:text-gray-100">Efectivo recaudado</h3>
           </div>
           <p className="text-xs text-gray-400">Anota el total de efectivo cobrado durante el día</p>
-          <div className="flex gap-2">
-            <div className="flex-1 flex items-center gap-2 border border-gray-200 dark:border-gray-600 rounded-xl px-3">
-              <span className="text-gray-400 font-bold">€</span>
-              <input type="number" step="0.01" min="0" placeholder="0.00" value={efectivoInput}
-                onChange={e => setEfectivoInput(e.target.value)}
-                className="flex-1 py-3 outline-none bg-transparent dark:text-white font-bold text-xl" />
-            </div>
-            <button type="submit" disabled={guardandoEfectivo}
-              className="bg-green-500 hover:bg-green-600 text-white font-bold px-4 rounded-xl transition disabled:opacity-50">
-              {guardandoEfectivo ? '...' : 'Guardar'}
-            </button>
+          {efectivo > 0 && (
+      <div className="bg-green-50 dark:bg-green-900 rounded-xl px-4 py-2 flex items-center justify-between">
+        <span className="text-green-700 dark:text-green-300 text-sm font-semibold">Total acumulado</span>
+        <span className="text-green-700 dark:text-green-300 font-black text-lg">{efectivo.toFixed(2)} €</span>
+      </div>
+    )}
+          <div className="flex items-center gap-2 border border-gray-200 dark:border-gray-600 rounded-xl px-3">
+            <span className="text-gray-400 font-bold">€</span>
+            <input type="number" step="0.01" min="0" placeholder="0.00" value={efectivoInput}
+              onChange={e => setEfectivoInput(e.target.value)}
+              className="flex-1 py-3 outline-none bg-transparent dark:text-white font-bold text-xl w-full" />
           </div>
+          <button type="submit" disabled={guardandoEfectivo}
+            className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-xl transition disabled:opacity-50">
+            {guardandoEfectivo ? 'Guardando...' : 'Guardar efectivo'}
+          </button>
         </form>
       )}
     </div>
