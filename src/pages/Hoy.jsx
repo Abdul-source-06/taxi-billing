@@ -8,8 +8,6 @@ import { useLocation } from 'react-router-dom'
 
 const TIPOS = [
   { id: 'servicio', label: 'Servicio', icon: Car },
-  { id: 'aeropuerto', label: 'Aeropuerto', icon: Plane },
-  { id: 'largo', label: 'Largo recorrido', icon: MapPin },
 ]
 
 const ORIGENES = [

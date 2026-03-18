@@ -206,7 +206,7 @@ function AppContent() {
         }}>
         <div className="flex items-center gap-2">
           <span className="text-2xl">🚕</span>
-          <h1 className="font-black text-yellow-900 text-xl">TaxiLog</h1>
+          <h1 className="font-black text-yellow-900 text-xl">TaxiBill</h1>
         </div>
         <button
           onClick={() => setMenuAbierto(true)}
