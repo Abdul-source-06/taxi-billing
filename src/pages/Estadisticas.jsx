@@ -353,13 +353,15 @@ export default function Estadisticas() {
             </div>
           </div>
 
-          {/* Gráfica */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow">
-            <h3 className="font-bold text-gray-700 dark:text-gray-200 mb-4">
-              Facturación por día
-            </h3>
-            <GraficaBarras datos={datosGrafica} />
-          </div>
+          {/* Gráfica — solo semanal */}
+          {vistaGrafica === "semana" && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow">
+              <h3 className="font-bold text-gray-700 dark:text-gray-200 mb-4">
+                Facturación por día
+              </h3>
+              <GraficaBarras datos={datosGrafica} />
+            </div>
+          )}
 
           {/* Media diaria */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow flex items-center gap-3">
