@@ -23,10 +23,12 @@ function AppContent() {
   if (!user) return <Login />
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-28 transition-colors duration-300">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
       <Toaster />
+
+      {/* Header fijo */}
       <header
-        className="bg-yellow-400 dark:bg-yellow-500 px-4 flex items-center justify-between shadow sticky top-0 z-50"
+        className="fixed top-0 left-0 right-0 bg-yellow-400 dark:bg-yellow-500 px-4 flex items-center justify-between shadow z-50"
         style={{
           paddingTop: 'max(env(safe-area-inset-top), 16px)',
           paddingBottom: '16px'
@@ -44,13 +46,18 @@ function AppContent() {
           </button>
         </div>
       </header>
-      <Routes>
-        <Route path="/" element={<Hoy />} />
-        <Route path="/historial" element={<Historial />} />
-        <Route path="/estadisticas" element={<Estadisticas />} />
-        <Route path="/ajustes" element={<Ajustes />} />
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
+
+      {/* Contenido con padding para no quedar tapado por el header y el bottomnav */}
+      <div className="pt-20 pb-28">
+        <Routes>
+          <Route path="/" element={<Hoy />} />
+          <Route path="/historial" element={<Historial />} />
+          <Route path="/estadisticas" element={<Estadisticas />} />
+          <Route path="/ajustes" element={<Ajustes />} />
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+      </div>
+
       <BottomNav />
     </div>
   )
