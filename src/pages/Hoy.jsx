@@ -6,10 +6,6 @@ import { es } from 'date-fns/locale'
 import toast, { Toaster } from 'react-hot-toast'
 import { useLocation } from 'react-router-dom'
 
-const TIPOS = [
-  { id: 'servicio', label: 'Servicio', icon: Car },
-]
-
 const ORIGENES = [
   { id: 'taximetro', label: 'Taxímetro', emoji: '🚕' },
   { id: 'freenow', label: 'FreeNow', emoji: '🔴' },
@@ -23,11 +19,7 @@ export default function Hoy() {
 
   const [fecha, setFecha] = useState(() => {
     if (location.state?.fecha) return new Date(location.state.fecha + 'T00:00:00')
-    const ahora = new Date()
-    if (ahora.getHours() < 6) {
-      ahora.setDate(ahora.getDate() - 1)
-    }
-    return ahora
+    return new Date()
   })
 
   const {
@@ -40,7 +32,6 @@ export default function Hoy() {
 
   const [pestana, setPestana] = useState('servicios')
   const [importe, setImporte] = useState('')
-  const [tipo, setTipo] = useState('servicio')
   const [origen, setOrigen] = useState('taximetro')
   const [notas, setNotas] = useState('')
   const [guardando, setGuardando] = useState(false)
@@ -59,7 +50,7 @@ export default function Hoy() {
     e.preventDefault()
     if (!importe || isNaN(importe)) return
     setGuardando(true)
-    await añadirRegistro(importe, tipo, notas, origen)
+    await añadirRegistro(importe, 'servicio', notas, origen)
     toast.success('Servicio añadido')
     setImporte('')
     setNotas('')
@@ -76,16 +67,17 @@ export default function Hoy() {
     setGuardandoGasto(false)
   }
 
-async function handleEfectivo(e) {
-  e.preventDefault()
-  if (!efectivoInput || isNaN(efectivoInput)) return
-  setGuardandoEfectivo(true)
-  const nuevoTotal = (efectivo || 0) + parseFloat(efectivoInput)
-  await guardarEfectivo(nuevoTotal)
-  toast.success(`Efectivo guardado — Total: ${nuevoTotal.toFixed(2)} €`)
-  setEfectivoInput('')
-  setGuardandoEfectivo(false)
-}
+  async function handleEfectivo(e) {
+    e.preventDefault()
+    if (!efectivoInput || isNaN(efectivoInput)) return
+    setGuardandoEfectivo(true)
+    const nuevoTotal = (efectivo || 0) + parseFloat(efectivoInput)
+    await guardarEfectivo(nuevoTotal)
+    toast.success(`Efectivo guardado — Total: ${nuevoTotal.toFixed(2)} €`)
+    setEfectivoInput('')
+    setGuardandoEfectivo(false)
+  }
+
   return (
     <div className="p-4 max-w-lg mx-auto">
       <Toaster />
@@ -175,16 +167,6 @@ async function handleEfectivo(e) {
               onChange={e => setImporte(e.target.value)}
               className="flex-1 text-2xl font-bold border-b-2 border-gray-200 dark:border-gray-600 focus:border-yellow-400 outline-none p-1 bg-transparent dark:text-white" />
           </div>
-          <div className="flex gap-2">
-            {TIPOS.map(t => (
-              <button key={t.id} type="button" onClick={() => setTipo(t.id)}
-                className={`flex-1 py-2 px-1 rounded-xl text-xs font-semibold flex flex-col items-center gap-1 transition
-                  ${tipo === t.id ? 'bg-yellow-400 text-yellow-900' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
-                <t.icon size={18} />
-                {t.label}
-              </button>
-            ))}
-          </div>
           <input type="text" placeholder="Notas (opcional)" value={notas}
             onChange={e => setNotas(e.target.value)}
             className="w-full border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-sm outline-none focus:border-yellow-400 bg-transparent dark:text-white dark:placeholder-gray-500" />
@@ -230,11 +212,11 @@ async function handleEfectivo(e) {
           </div>
           <p className="text-xs text-gray-400">Anota el total de efectivo cobrado durante el día</p>
           {efectivo > 0 && (
-      <div className="bg-green-50 dark:bg-green-900 rounded-xl px-4 py-2 flex items-center justify-between">
-        <span className="text-green-700 dark:text-green-300 text-sm font-semibold">Total acumulado</span>
-        <span className="text-green-700 dark:text-green-300 font-black text-lg">{efectivo.toFixed(2)} €</span>
-      </div>
-    )}
+            <div className="bg-green-50 dark:bg-green-900 rounded-xl px-4 py-2 flex items-center justify-between">
+              <span className="text-green-700 dark:text-green-300 text-sm font-semibold">Total acumulado</span>
+              <span className="text-green-700 dark:text-green-300 font-black text-lg">{efectivo.toFixed(2)} €</span>
+            </div>
+          )}
           <div className="flex items-center gap-2 border border-gray-200 dark:border-gray-600 rounded-xl px-3">
             <span className="text-gray-400 font-bold">€</span>
             <input type="number" step="0.01" min="0" placeholder="0.00" value={efectivoInput}

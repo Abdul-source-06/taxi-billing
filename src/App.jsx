@@ -83,14 +83,15 @@ function Menu({ onClose, oscuro, toggleOscuro, logout }) {
           }
         `}</style>
 
-        <div className="flex items-center justify-between px-5 py-5 border-b"
+        <div className="flex items-center justify-between px-5"
           style={{
             paddingTop: 'calc(env(safe-area-inset-top) + 20px)',
-            borderColor: oscuro ? '#374151' : '#f3f4f6'
+            paddingBottom: '20px',
+            borderBottom: `1px solid ${oscuro ? '#374151' : '#f3f4f6'}`
           }}>
           <div className="flex items-center gap-2">
             <span className="text-2xl">🚕</span>
-            <span className="font-black text-lg" style={{ color: oscuro ? '#f9fafb' : '#111827' }}>TaxiLog</span>
+            <span className="font-black text-lg" style={{ color: oscuro ? '#f9fafb' : '#111827' }}>TaxiBill</span>
           </div>
           <button onClick={onClose}
             className="p-2 rounded-xl transition"
@@ -191,15 +192,16 @@ function AppContent() {
 
   if (!user) return <Login />
 
+  // Altura total del header = safe-area-inset-top + 16px padding top + contenido (~56px) + 16px padding bottom
+  const headerHeight = 'calc(env(safe-area-inset-top) + 88px)'
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-28 transition-colors duration-300">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300"
+      style={{ paddingTop: headerHeight, paddingBottom: 'calc(env(safe-area-inset-bottom) + 80px)' }}>
       <Toaster />
 
-      <div className="fixed top-0 left-0 right-0 bg-yellow-400 dark:bg-yellow-500 z-50"
-        style={{ height: 'env(safe-area-inset-top)' }} />
-
       <header
-        className="bg-yellow-400 dark:bg-yellow-500 px-4 flex items-center justify-between shadow sticky top-0 z-40"
+        className="bg-yellow-400 dark:bg-yellow-500 px-4 flex items-center justify-between shadow fixed top-0 left-0 right-0 z-30"
         style={{
           paddingTop: 'calc(env(safe-area-inset-top) + 16px)',
           paddingBottom: '16px'

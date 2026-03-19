@@ -18,11 +18,7 @@ export function useRegistros(fecha = new Date()) {
   const [efectivo, setEfectivo] = useState(0);
   const [loading, setLoading] = useState(true);
   const [online, setOnline] = useState(navigator.onLine);
-  const fechaTurno = new Date(fecha);
-  if (fechaTurno.getHours() < 6) {
-    fechaTurno.setDate(fechaTurno.getDate() - 1);
-  }
-  const fechaStr = format(fechaTurno, "yyyy-MM-dd");
+  const fechaStr = format(fecha, "yyyy-MM-dd");
   const porcentaje = parseFloat(localStorage.getItem("porcentaje") || "45");
 
   useEffect(() => {
