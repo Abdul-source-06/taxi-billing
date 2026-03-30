@@ -1,15 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRegistros } from '../hooks/useRegistros'
-import { PlusCircle, Car, Plane, MapPin, ChevronLeft, ChevronRight, Wallet } from 'lucide-react'
+import { PlusCircle, ChevronLeft, ChevronRight, Wallet, Gift } from 'lucide-react'
 import { format, addDays, subDays, isToday } from 'date-fns'
 import { es } from 'date-fns/locale'
 import toast, { Toaster } from 'react-hot-toast'
 import { useLocation } from 'react-router-dom'
 
 const ORIGENES = [
-  { id: 'taximetro', label: 'Taxímetro', emoji: '🚕' },
-  { id: 'freenow', label: 'FreeNow', emoji: '🔴' },
-  { id: 'uber', label: 'Uber', emoji: '⚫' },
+  { id: 'taximetro', label: 'Taxímetro', emoji: '🚕', logo: null },
+  { id: 'freenow', label: 'FreeNow', emoji: null, logo: '/freenow.png' },
+  { id: 'uber', label: 'Uber', emoji: null, logo: '/uber.png' },
 ]
 
 const CONCEPTOS_GASTO = ['Gasolina', 'Parking', 'Peaje', 'Mantenimiento', 'Otros']
@@ -26,8 +26,8 @@ export default function Hoy() {
     registros, gastos, loading, online,
     total, tuParte, porcentaje,
     totalTaximetro, totalFreeNow, totalUber,
-    efectivo,
-    añadirRegistro, añadirGasto, guardarEfectivo
+    efectivo, propinas,
+    añadirRegistro, añadirGasto, guardarEfectivo, guardarPropinas
   } = useRegistros(fecha)
 
   const [pestana, setPestana] = useState('servicios')
@@ -42,6 +42,9 @@ export default function Hoy() {
 
   const [efectivoInput, setEfectivoInput] = useState('')
   const [guardandoEfectivo, setGuardandoEfectivo] = useState(false)
+
+  const [propinaInput, setPropinaInput] = useState('')
+  const [guardandoPropina, setGuardandoPropina] = useState(false)
 
   const esHoy = isToday(fecha)
   const fechaLabel = esHoy ? 'Hoy' : format(fecha, "EEEE d 'de' MMMM", { locale: es })
@@ -76,6 +79,17 @@ export default function Hoy() {
     toast.success(`Efectivo guardado — Total: ${nuevoTotal.toFixed(2)} €`)
     setEfectivoInput('')
     setGuardandoEfectivo(false)
+  }
+
+  async function handlePropina(e) {
+    e.preventDefault()
+    if (!propinaInput || isNaN(propinaInput)) return
+    setGuardandoPropina(true)
+    const nuevoTotal = (propinas || 0) + parseFloat(propinaInput)
+    await guardarPropinas(nuevoTotal)
+    toast.success(`Propina guardada — Total: ${nuevoTotal.toFixed(2)} €`)
+    setPropinaInput('')
+    setGuardandoPropina(false)
   }
 
   return (
@@ -120,44 +134,53 @@ export default function Hoy() {
             <p className="text-yellow-900 font-black text-sm">{totalTaximetro.toFixed(2)}€</p>
           </div>
           <div className="bg-yellow-300 rounded-xl p-2 text-center">
-            <p className="text-yellow-900 text-xs">🔴 FreeNow</p>
+            <div className="flex items-center justify-center gap-1">
+              <img src="/freenow.png" alt="FreeNow" className="h-3 object-contain" />
+            </div>
             <p className="text-yellow-900 font-black text-sm">{totalFreeNow.toFixed(2)}€</p>
           </div>
           <div className="bg-yellow-300 rounded-xl p-2 text-center">
-            <p className="text-yellow-900 text-xs">⚫ Uber</p>
+            <div className="flex items-center justify-center gap-1">
+              <img src="/uber.png" alt="Uber" className="h-3 object-contain" />
+            </div>
             <p className="text-yellow-900 font-black text-sm">{totalUber.toFixed(2)}€</p>
           </div>
         </div>
       </div>
 
       {/* Pestañas */}
-      <div className="flex gap-2 mb-4">
+      <div className="grid grid-cols-3 gap-1 mb-4">
         <button onClick={() => setPestana('servicios')}
-          className={`flex-1 py-2 rounded-xl font-semibold text-sm transition
+          className={`py-2 rounded-xl font-semibold text-xs transition
             ${pestana === 'servicios' ? 'bg-yellow-400 text-yellow-900' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 shadow'}`}>
           🚕 Servicios
         </button>
-        <button onClick={() => setPestana('gastos')}
-          className={`flex-1 py-2 rounded-xl font-semibold text-sm transition
-            ${pestana === 'gastos' ? 'bg-red-400 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 shadow'}`}>
-          💸 Gastos
-        </button>
         <button onClick={() => setPestana('efectivo')}
-          className={`flex-1 py-2 rounded-xl font-semibold text-sm transition
+          className={`py-2 rounded-xl font-semibold text-xs transition
             ${pestana === 'efectivo' ? 'bg-green-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 shadow'}`}>
           💵 Efectivo
         </button>
+        <button onClick={() => setPestana('propinas')}
+          className={`py-2 rounded-xl font-semibold text-xs transition
+            ${pestana === 'propinas' ? 'bg-purple-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 shadow'}`}>
+          💲 Propinas
+        </button>
       </div>
 
+      {/* Servicios */}
       {pestana === 'servicios' && (
         <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow space-y-3">
           <h2 className="font-bold text-gray-800 dark:text-gray-100">Añadir servicio</h2>
           <div className="flex gap-2">
             {ORIGENES.map(o => (
               <button key={o.id} type="button" onClick={() => setOrigen(o.id)}
-                className={`flex-1 py-2 rounded-xl text-xs font-semibold transition
+                className={`flex-1 py-2 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1
                   ${origen === o.id ? 'bg-yellow-400 text-yellow-900' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
-                {o.emoji} {o.label}
+                {o.logo
+                  ? <img src={o.logo} alt={o.label} className="h-4 object-contain" />
+                  : <span>{o.emoji}</span>
+                }
+                <span>{o.label}</span>
               </button>
             ))}
           </div>
@@ -173,37 +196,12 @@ export default function Hoy() {
           <button type="submit" disabled={guardando || !importe}
             className="w-full bg-yellow-400 hover:bg-yellow-500 disabled:opacity-50 text-yellow-900 font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition">
             <PlusCircle size={20} />
-            {guardando ? 'Guardando...' : 'Añadir servicio'}
+            {guardando ? 'Guardando...' : 'Añadir'}
           </button>
         </form>
       )}
 
-      {pestana === 'gastos' && (
-        <form onSubmit={handleGasto} className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow space-y-3">
-          <h2 className="font-bold text-gray-800 dark:text-gray-100">Añadir gasto <span className="text-xs text-gray-400 font-normal">(opcional)</span></h2>
-          <div className="flex gap-2">
-            <span className="text-2xl font-bold text-gray-400 self-center">€</span>
-            <input type="number" step="0.01" min="0" placeholder="0.00" value={gastoImporte}
-              onChange={e => setGastoImporte(e.target.value)}
-              className="flex-1 text-2xl font-bold border-b-2 border-gray-200 dark:border-gray-600 focus:border-red-400 outline-none p-1 bg-transparent dark:text-white" />
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            {CONCEPTOS_GASTO.map(c => (
-              <button key={c} type="button" onClick={() => setGastoConcepto(c)}
-                className={`py-1 px-3 rounded-xl text-xs font-semibold transition
-                  ${gastoConcepto === c ? 'bg-red-400 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
-                {c}
-              </button>
-            ))}
-          </div>
-          <button type="submit" disabled={guardandoGasto || !gastoImporte}
-            className="w-full bg-red-400 hover:bg-red-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition">
-            <PlusCircle size={20} />
-            {guardandoGasto ? 'Guardando...' : 'Añadir gasto'}
-          </button>
-        </form>
-      )}
-
+      {/* Efectivo */}
       {pestana === 'efectivo' && (
         <form onSubmit={handleEfectivo} className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow space-y-3">
           <div className="flex items-center gap-2 mb-1">
@@ -226,6 +224,33 @@ export default function Hoy() {
           <button type="submit" disabled={guardandoEfectivo}
             className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-xl transition disabled:opacity-50">
             {guardandoEfectivo ? 'Guardando...' : 'Guardar efectivo'}
+          </button>
+        </form>
+      )}
+
+      {/* Propinas */}
+      {pestana === 'propinas' && (
+        <form onSubmit={handlePropina} className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow space-y-3">
+          <div className="flex items-center gap-2 mb-1">
+            <Gift size={18} className="text-purple-500" />
+            <h3 className="font-bold text-gray-800 dark:text-gray-100">Propinas del día</h3>
+          </div>
+          <p className="text-xs text-gray-400">Añade las propinas recibidas durante el día</p>
+          {propinas > 0 && (
+            <div className="bg-purple-50 dark:bg-purple-900 rounded-xl px-4 py-2 flex items-center justify-between">
+              <span className="text-purple-700 dark:text-purple-300 text-sm font-semibold">Total acumulado</span>
+              <span className="text-purple-700 dark:text-purple-300 font-black text-lg">{propinas.toFixed(2)} €</span>
+            </div>
+          )}
+          <div className="flex items-center gap-2 border border-gray-200 dark:border-gray-600 rounded-xl px-3">
+            <span className="text-gray-400 font-bold">€</span>
+            <input type="number" step="0.01" min="0" placeholder="0.00" value={propinaInput}
+              onChange={e => setPropinaInput(e.target.value)}
+              className="flex-1 py-3 outline-none bg-transparent dark:text-white font-bold text-xl w-full" />
+          </div>
+          <button type="submit" disabled={guardandoPropina}
+            className="w-full bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 rounded-xl transition disabled:opacity-50">
+            {guardandoPropina ? 'Guardando...' : 'Guardar propina'}
           </button>
         </form>
       )}

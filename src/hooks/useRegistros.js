@@ -16,6 +16,7 @@ export function useRegistros(fecha = new Date()) {
   const [registros, setRegistros] = useState([]);
   const [gastos, setGastos] = useState([]);
   const [efectivo, setEfectivo] = useState(0);
+  const [propinas, setPropinas] = useState(0);
   const [loading, setLoading] = useState(true);
   const [online, setOnline] = useState(navigator.onLine);
   const fechaStr = format(fecha, "yyyy-MM-dd");
@@ -43,29 +44,20 @@ export function useRegistros(fecha = new Date()) {
 
   async function cargarTodo() {
     setLoading(true);
-    setEfectivo(0); // resetea el efectivo al cambiar de día
+    setEfectivo(0);
+    setPropinas(0);
     if (navigator.onLine) {
       try {
         const [
           { data: dataRegistros },
           { data: dataGastos },
           { data: dataEfectivo },
+          { data: dataPropinas },
         ] = await Promise.all([
-          supabase
-            .from("registros")
-            .select("*")
-            .eq("fecha", fechaStr)
-            .order("hora", { ascending: false }),
-          supabase
-            .from("gastos")
-            .select("*")
-            .eq("fecha", fechaStr)
-            .order("hora", { ascending: false }),
-          supabase
-            .from("efectivo_dia")
-            .select("*")
-            .eq("fecha", fechaStr)
-            .limit(1),
+          supabase.from("registros").select("*").eq("fecha", fechaStr).order("hora", { ascending: false }),
+          supabase.from("gastos").select("*").eq("fecha", fechaStr).order("hora", { ascending: false }),
+          supabase.from("efectivo_dia").select("*").eq("fecha", fechaStr).limit(1),
+          supabase.from("propinas_dia").select("*").eq("fecha", fechaStr).limit(1),
         ]);
         const regs = dataRegistros || [];
         const gasts = dataGastos || [];
@@ -74,6 +66,7 @@ export function useRegistros(fecha = new Date()) {
         setRegistros(regs);
         setGastos(gasts);
         setEfectivo(dataEfectivo?.[0]?.importe || 0);
+        setPropinas(dataPropinas?.[0]?.importe || 0);
       } catch {
         const regs = await getRegistrosLocal(fechaStr);
         const gasts = await getGastosLocal(fechaStr);
@@ -89,24 +82,25 @@ export function useRegistros(fecha = new Date()) {
     setLoading(false);
   }
 
-async function guardarEfectivo(importe) {
-  setEfectivo(importe);
-  if (navigator.onLine) {
-    await supabase
-      .from("efectivo_dia")
-      .upsert(
-        { fecha: fechaStr, importe: parseFloat(importe) },
-        { onConflict: 'fecha' }
-      );
+  async function guardarEfectivo(importe) {
+    setEfectivo(importe);
+    if (navigator.onLine) {
+      await supabase
+        .from("efectivo_dia")
+        .upsert({ fecha: fechaStr, importe: parseFloat(importe) }, { onConflict: "fecha" });
+    }
   }
-}
 
-  async function añadirRegistro(
-    importe,
-    tipo,
-    notas = "",
-    origen = "taximetro",
-  ) {
+  async function guardarPropinas(importe) {
+    setPropinas(importe);
+    if (navigator.onLine) {
+      await supabase
+        .from("propinas_dia")
+        .upsert({ fecha: fechaStr, importe: parseFloat(importe) }, { onConflict: "fecha" });
+    }
+  }
+
+  async function añadirRegistro(importe, tipo, notas = "", origen = "taximetro") {
     const ahora = new Date();
     const existente = registros.find((r) => r.origen === origen);
 
@@ -114,24 +108,13 @@ async function guardarEfectivo(importe) {
       const nuevoTotal = parseFloat(existente.importe) + parseFloat(importe);
       const registroActualizado = { ...existente, importe: nuevoTotal };
       await guardarRegistroLocal(registroActualizado);
-      setRegistros((prev) =>
-        prev.map((r) => (r.id === existente.id ? registroActualizado : r)),
-      );
+      setRegistros((prev) => prev.map((r) => (r.id === existente.id ? registroActualizado : r)));
       if (navigator.onLine) {
-        await supabase
-          .from("registros")
-          .update({ importe: nuevoTotal })
-          .eq("id", existente.id);
+        await supabase.from("registros").update({ importe: nuevoTotal }).eq("id", existente.id);
       } else {
         await añadirPendiente({
           tipo: "editar_registro",
-          datos: {
-            id: existente.id,
-            importe: nuevoTotal,
-            tipo: existente.tipo,
-            notas: existente.notas,
-            origen,
-          },
+          datos: { id: existente.id, importe: nuevoTotal, tipo: existente.tipo, notas: existente.notas, origen },
         });
       }
     } else {
@@ -148,21 +131,13 @@ async function guardarEfectivo(importe) {
       await guardarRegistroLocal(nuevoRegistro);
       setRegistros((prev) => [nuevoRegistro, ...prev]);
       if (navigator.onLine) {
-        const { data } = await supabase
-          .from("registros")
-          .insert([nuevoRegistro])
-          .select();
+        const { data } = await supabase.from("registros").insert([nuevoRegistro]).select();
         if (data) {
           await guardarRegistroLocal(data[0]);
-          setRegistros((prev) =>
-            prev.map((r) => (r.id === nuevoRegistro.id ? data[0] : r)),
-          );
+          setRegistros((prev) => prev.map((r) => (r.id === nuevoRegistro.id ? data[0] : r)));
         }
       } else {
-        await añadirPendiente({
-          tipo: "insertar_registro",
-          datos: nuevoRegistro,
-        });
+        await añadirPendiente({ tipo: "insertar_registro", datos: nuevoRegistro });
       }
     }
   }
@@ -176,19 +151,11 @@ async function guardarEfectivo(importe) {
       origen,
     };
     await guardarRegistroLocal(registroActualizado);
-    setRegistros((prev) =>
-      prev.map((r) => (r.id === id ? registroActualizado : r)),
-    );
+    setRegistros((prev) => prev.map((r) => (r.id === id ? registroActualizado : r)));
     if (navigator.onLine) {
-      await supabase
-        .from("registros")
-        .update({ importe: parseFloat(importe), tipo, notas, origen })
-        .eq("id", id);
+      await supabase.from("registros").update({ importe: parseFloat(importe), tipo, notas, origen }).eq("id", id);
     } else {
-      await añadirPendiente({
-        tipo: "editar_registro",
-        datos: { id, importe, tipo, notas, origen },
-      });
+      await añadirPendiente({ tipo: "editar_registro", datos: { id, importe, tipo, notas, origen } });
     }
   }
 
@@ -215,15 +182,10 @@ async function guardarEfectivo(importe) {
     await guardarGastoLocal(nuevoGasto);
     setGastos((prev) => [nuevoGasto, ...prev]);
     if (navigator.onLine) {
-      const { data } = await supabase
-        .from("gastos")
-        .insert([nuevoGasto])
-        .select();
+      const { data } = await supabase.from("gastos").insert([nuevoGasto]).select();
       if (data) {
         await guardarGastoLocal(data[0]);
-        setGastos((prev) =>
-          prev.map((g) => (g.id === nuevoGasto.id ? data[0] : g)),
-        );
+        setGastos((prev) => prev.map((g) => (g.id === nuevoGasto.id ? data[0] : g)));
       }
     } else {
       await añadirPendiente({ tipo: "insertar_gasto", datos: nuevoGasto });
@@ -240,42 +202,21 @@ async function guardarEfectivo(importe) {
     }
   }
 
-  const totalIngresos = registros.reduce(
-    (acc, r) => acc + parseFloat(r.importe),
-    0,
-  );
+  const totalIngresos = registros.reduce((acc, r) => acc + parseFloat(r.importe), 0);
   const totalGastos = gastos.reduce((acc, g) => acc + parseFloat(g.importe), 0);
   const beneficioNeto = totalIngresos - totalGastos;
   const tuParte = totalIngresos * (porcentaje / 100);
-  const totalTaximetro = registros
-    .filter((r) => r.origen === "taximetro")
-    .reduce((acc, r) => acc + parseFloat(r.importe), 0);
-  const totalFreeNow = registros
-    .filter((r) => r.origen === "freenow")
-    .reduce((acc, r) => acc + parseFloat(r.importe), 0);
-  const totalUber = registros
-    .filter((r) => r.origen === "uber")
-    .reduce((acc, r) => acc + parseFloat(r.importe), 0);
+  const totalTaximetro = registros.filter((r) => r.origen === "taximetro").reduce((acc, r) => acc + parseFloat(r.importe), 0);
+  const totalFreeNow = registros.filter((r) => r.origen === "freenow").reduce((acc, r) => acc + parseFloat(r.importe), 0);
+  const totalUber = registros.filter((r) => r.origen === "uber").reduce((acc, r) => acc + parseFloat(r.importe), 0);
 
   return {
-    registros,
-    gastos,
-    loading,
-    online,
-    total: totalIngresos,
-    totalGastos,
-    beneficioNeto,
-    tuParte,
-    porcentaje,
-    efectivo,
-    totalTaximetro,
-    totalFreeNow,
-    totalUber,
-    añadirRegistro,
-    editarRegistro,
-    eliminarRegistro,
-    añadirGasto,
-    eliminarGasto,
-    guardarEfectivo,
+    registros, gastos, loading, online,
+    total: totalIngresos, totalGastos, beneficioNeto,
+    tuParte, porcentaje, efectivo, propinas,
+    totalTaximetro, totalFreeNow, totalUber,
+    añadirRegistro, editarRegistro, eliminarRegistro,
+    añadirGasto, eliminarGasto,
+    guardarEfectivo, guardarPropinas,
   };
 }

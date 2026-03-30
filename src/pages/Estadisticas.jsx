@@ -312,21 +312,31 @@ export default function Estadisticas() {
                   label: "🚕 Taxímetro",
                   valor: origenes.taximetro,
                   color: "bg-yellow-400",
+                  logo: null,
                 },
                 {
-                  label: "🔴 FreeNow",
+                  label: "FreeNow",
                   valor: origenes.freenow,
                   color: "bg-red-500",
+                  logo: "/freenow.png",
                 },
                 {
-                  label: "⚫ Uber",
+                  label: "Uber",
                   valor: origenes.uber,
                   color: "bg-gray-800 dark:bg-gray-400",
+                  logo: "/uber.png",
                 },
               ].map((o) => (
                 <div key={o.label}>
                   <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                      {o.logo ? (
+                        <img
+                          src={o.logo}
+                          alt={o.label}
+                          className="h-4 object-contain"
+                        />
+                      ) : null}
                       {o.label}
                     </span>
                     <span className="font-black text-gray-800 dark:text-white">
