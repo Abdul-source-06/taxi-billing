@@ -12,6 +12,11 @@ import {
 } from "../lib/db";
 import { sincronizar } from "../lib/sync";
 
+async function getUserId() {
+  const { data: { session } } = await supabase.auth.getSession()
+  return session?.user?.id ?? null
+}
+
 export function useRegistros(fecha = new Date()) {
   const [registros, setRegistros] = useState([]);
   const [gastos, setGastos] = useState([]);
@@ -48,16 +53,17 @@ export function useRegistros(fecha = new Date()) {
     setPropinas(0);
     if (navigator.onLine) {
       try {
+        const user_id = await getUserId();
         const [
           { data: dataRegistros },
           { data: dataGastos },
           { data: dataEfectivo },
           { data: dataPropinas },
         ] = await Promise.all([
-          supabase.from("registros").select("*").eq("fecha", fechaStr).order("hora", { ascending: false }),
-          supabase.from("gastos").select("*").eq("fecha", fechaStr).order("hora", { ascending: false }),
-          supabase.from("efectivo_dia").select("*").eq("fecha", fechaStr).limit(1),
-          supabase.from("propinas_dia").select("*").eq("fecha", fechaStr).limit(1),
+          supabase.from("registros").select("*").eq("fecha", fechaStr).eq("user_id", user_id).order("hora", { ascending: false }),
+          supabase.from("gastos").select("*").eq("fecha", fechaStr).eq("user_id", user_id).order("hora", { ascending: false }),
+          supabase.from("efectivo_dia").select("*").eq("fecha", fechaStr).eq("user_id", user_id).limit(1),
+          supabase.from("propinas_dia").select("*").eq("fecha", fechaStr).eq("user_id", user_id).limit(1),
         ]);
         const regs = dataRegistros || [];
         const gasts = dataGastos || [];
@@ -85,23 +91,26 @@ export function useRegistros(fecha = new Date()) {
   async function guardarEfectivo(importe) {
     setEfectivo(importe);
     if (navigator.onLine) {
+      const user_id = await getUserId();
       await supabase
         .from("efectivo_dia")
-        .upsert({ fecha: fechaStr, importe: parseFloat(importe) }, { onConflict: "fecha" });
+        .upsert({ fecha: fechaStr, importe: parseFloat(importe), user_id }, { onConflict: "fecha,user_id" });
     }
   }
 
   async function guardarPropinas(importe) {
     setPropinas(importe);
     if (navigator.onLine) {
+      const user_id = await getUserId();
       await supabase
         .from("propinas_dia")
-        .upsert({ fecha: fechaStr, importe: parseFloat(importe) }, { onConflict: "fecha" });
+        .upsert({ fecha: fechaStr, importe: parseFloat(importe), user_id }, { onConflict: "fecha,user_id" });
     }
   }
 
   async function añadirRegistro(importe, tipo, notas = "", origen = "taximetro") {
     const ahora = new Date();
+    const user_id = await getUserId();
     const existente = registros.find((r) => r.origen === origen);
 
     if (existente) {
@@ -126,6 +135,7 @@ export function useRegistros(fecha = new Date()) {
         tipo,
         notas,
         origen,
+        user_id,
         created_at: new Date().toISOString(),
       };
       await guardarRegistroLocal(nuevoRegistro);
@@ -171,12 +181,14 @@ export function useRegistros(fecha = new Date()) {
 
   async function añadirGasto(importe, concepto) {
     const ahora = new Date();
+    const user_id = await getUserId();
     const nuevoGasto = {
       id: crypto.randomUUID(),
       fecha: fechaStr,
       hora: format(ahora, "HH:mm:ss"),
       importe: parseFloat(importe),
       concepto,
+      user_id,
       created_at: new Date().toISOString(),
     };
     await guardarGastoLocal(nuevoGasto);

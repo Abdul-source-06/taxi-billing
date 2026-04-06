@@ -107,14 +107,20 @@ export default function Historial() {
     setEditandoRegistro(null)
   }, [fechaRef])
 
+  async function getUserId() {
+    const { data: { session } } = await supabase.auth.getSession()
+    return session?.user?.id ?? null
+  }
+
   async function cargarHistorial() {
     setLoading(true)
     const inicio = format(startOfMonth(fechaRef), 'yyyy-MM-dd')
     const fin = format(endOfMonth(fechaRef), 'yyyy-MM-dd')
+    const user_id = await getUserId()
 
     const [{ data }, { data: dataEfectivo }] = await Promise.all([
-      supabase.from('registros').select('fecha, importe, origen').gte('fecha', inicio).lte('fecha', fin).order('fecha', { ascending: false }),
-      supabase.from('efectivo_dia').select('fecha, importe').gte('fecha', inicio).lte('fecha', fin)
+      supabase.from('registros').select('fecha, importe, origen').eq('user_id', user_id).gte('fecha', inicio).lte('fecha', fin).order('fecha', { ascending: false }),
+      supabase.from('efectivo_dia').select('fecha, importe').eq('user_id', user_id).gte('fecha', inicio).lte('fecha', fin)
     ])
 
     if (data) {
@@ -150,10 +156,11 @@ export default function Historial() {
     setEditandoRegistro(null)
     setAñadiendoEfectivo(false)
     setLoadingDia(true)
+    const user_id = await getUserId()
 
     const [{ data }, { data: dataEfectivo }] = await Promise.all([
-      supabase.from('registros').select('*').eq('fecha', fecha).order('hora', { ascending: false }),
-      supabase.from('efectivo_dia').select('*').eq('fecha', fecha).limit(1)
+      supabase.from('registros').select('*').eq('fecha', fecha).eq('user_id', user_id).order('hora', { ascending: false }),
+      supabase.from('efectivo_dia').select('*').eq('fecha', fecha).eq('user_id', user_id).limit(1)
     ])
 
     setRegistrosDia(data || [])
@@ -164,8 +171,9 @@ export default function Historial() {
   async function guardarEfectivoDia(fecha) {
     if (!nuevoEfectivo || isNaN(nuevoEfectivo)) return
     setGuardandoEfectivo(true)
+    const user_id = await getUserId()
     const nuevoTotal = efectivoDia + parseFloat(nuevoEfectivo)
-    await supabase.from('efectivo_dia').upsert({ fecha, importe: nuevoTotal }, { onConflict: 'fecha' })
+    await supabase.from('efectivo_dia').upsert({ fecha, importe: nuevoTotal, user_id }, { onConflict: 'fecha,user_id' })
     setEfectivoDia(nuevoTotal)
     await cargarHistorial()
     toast.success(`Efectivo guardado — Total: ${nuevoTotal.toFixed(2)} €`)
@@ -175,7 +183,8 @@ export default function Historial() {
   }
 
   async function editarEfectivoDia(fecha, importe) {
-    await supabase.from('efectivo_dia').upsert({ fecha, importe: parseFloat(importe) }, { onConflict: 'fecha' })
+    const user_id = await getUserId()
+    await supabase.from('efectivo_dia').upsert({ fecha, importe: parseFloat(importe), user_id }, { onConflict: 'fecha,user_id' })
     setEfectivoDia(parseFloat(importe))
     await cargarHistorial()
     toast.success('Efectivo actualizado')
@@ -197,6 +206,7 @@ export default function Historial() {
       await supabase.from('registros').update({ importe: nuevoTotal }).eq('id', registroExistente.id)
       setRegistrosDia(prev => prev.map(r => r.id === registroExistente.id ? { ...r, importe: nuevoTotal } : r))
     } else if (modalOrigenOperacion === 'sumar') {
+      const user_id = await getUserId()
       const { data } = await supabase.from('registros').insert([{
         id: crypto.randomUUID(),
         fecha,
@@ -205,6 +215,7 @@ export default function Historial() {
         tipo: 'servicio',
         origen: origenId,
         notas: '',
+        user_id,
       }]).select()
       if (data) setRegistrosDia(prev => [data[0], ...prev])
     }
@@ -268,7 +279,6 @@ export default function Historial() {
     <div className="p-4 max-w-lg mx-auto">
       <Toaster />
 
-      {/* Selector de mes */}
       <div className="flex items-center justify-between mb-4">
         <button onClick={() => setFechaRef(subMonths(fechaRef, 1))}
           className="p-2 rounded-xl bg-white dark:bg-gray-800 shadow text-gray-500 hover:text-yellow-500">
@@ -283,7 +293,6 @@ export default function Historial() {
 
       {loading && <p className="text-center text-gray-400 mt-8">Cargando...</p>}
 
-      {/* Modal editar servicio */}
       {editandoRegistro && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
           <div className="rounded-2xl p-5 w-full max-w-lg space-y-3 shadow-2xl" style={estiloModal}>
@@ -340,7 +349,6 @@ export default function Historial() {
         </div>
       )}
 
-      {/* Modal origen (sumar/restar) */}
       {modalOrigen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
           <div className="rounded-2xl p-5 w-full max-w-lg space-y-3 shadow-2xl" style={estiloModal}>
@@ -408,7 +416,6 @@ export default function Historial() {
         </div>
       )}
 
-      {/* Modal añadir efectivo */}
       {añadiendoEfectivo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
           <div className="rounded-2xl p-5 w-full max-w-lg space-y-3 shadow-2xl" style={estiloModal}>
@@ -455,7 +462,6 @@ export default function Historial() {
         </div>
       )}
 
-      {/* Modal editar efectivo */}
       {editandoEfectivo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
           <div className="rounded-2xl p-5 w-full max-w-lg space-y-3 shadow-2xl" style={estiloModal}>
@@ -501,7 +507,6 @@ export default function Historial() {
         </div>
       )}
 
-      {/* Lista de días */}
       <div className="space-y-2">
         {dias.map(dia => (
           <FilaDia key={dia.fecha} dia={dia} porcentaje={porcentaje}

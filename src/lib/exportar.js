@@ -5,7 +5,7 @@ import { saveAs } from 'file-saver'
 import { format, startOfWeek, endOfWeek } from 'date-fns'
 import { es } from 'date-fns/locale'
 
-function agruparDatos(registros, gastos, efectivo, fechas) {
+function agruparDatos(registros, gastos, dataEfectivo) {
   const porFecha = registros.reduce((acc, r) => {
     if (!acc[r.fecha]) acc[r.fecha] = { taximetro: 0, freenow: 0, uber: 0, total: 0 }
     const imp = parseFloat(r.importe)
@@ -22,17 +22,23 @@ function agruparDatos(registros, gastos, efectivo, fechas) {
     return acc
   }, {})
 
-  return { porFecha, gastosPorFecha, fechas: fechas || Object.keys(porFecha).sort() }
+  const efectivoPorFecha = (dataEfectivo || []).reduce((acc, e) => {
+    acc[e.fecha] = parseFloat(e.importe)
+    return acc
+  }, {})
+
+  const fechas = Object.keys(porFecha).sort()
+  return { porFecha, gastosPorFecha, efectivoPorFecha, fechas }
 }
 
-function tablaBody(porFecha, gastosPorFecha, fechas, efectivo) {
+function tablaBody(porFecha, gastosPorFecha, efectivoPorFecha, fechas) {
   return fechas.map(f => [
     format(new Date(f + 'T00:00:00'), "EEE d MMM", { locale: es }),
     `${(porFecha[f]?.taximetro || 0).toFixed(2)} €`,
     `${(porFecha[f]?.freenow || 0).toFixed(2)} €`,
     `${(porFecha[f]?.uber || 0).toFixed(2)} €`,
     `${(porFecha[f]?.total || 0).toFixed(2)} €`,
-    `${(efectivo / Math.max(fechas.length, 1)).toFixed(2)} €`,
+    `${(efectivoPorFecha[f] || 0).toFixed(2)} €`,
     `${(gastosPorFecha[f] || 0).toFixed(2)} €`,
   ])
 }
@@ -66,18 +72,18 @@ const estiloTabla = {
   alternateRowStyles: { fillColor: [255, 251, 235] },
   columnStyles: {
     0: { halign: 'left', cellWidth: 22 },
-    1: { halign: 'right', cellWidth: 27 },
-    2: { halign: 'right', cellWidth: 27 },
-    3: { halign: 'right', cellWidth: 27 },
-    4: { halign: 'right', fontStyle: 'bold', cellWidth: 27 },
-    5: { halign: 'right', cellWidth: 27 },
-    6: { halign: 'right', cellWidth: 27 },
+    1: { halign: 'left', cellWidth: 27 },
+    2: { halign: 'left', cellWidth: 27 },
+    3: { halign: 'left', cellWidth: 27 },
+    4: { halign: 'left', fontStyle: 'bold', cellWidth: 27 },
+    5: { halign: 'left', cellWidth: 27 },
+    6: { halign: 'left', cellWidth: 27 },
   },
   margin: { left: 7, right: 7 },
 }
 
 // ─── PDF MENSUAL ───────────────────────────────────────────
-export function exportarPDF(fecha, registros, gastos, total, totalGastos, beneficioNeto, efectivo = 0, porcentaje = 45) {
+export function exportarPDF(fecha, registros, gastos, total, totalGastos, beneficioNeto, efectivo = 0, porcentaje = 45, dataEfectivo = []) {
   const doc = new jsPDF()
   const labelPeriodo = `Informe del mes — ${format(new Date(fecha + 'T00:00:00'), "MMMM yyyy", { locale: es })}`
 
@@ -96,12 +102,12 @@ export function exportarPDF(fecha, registros, gastos, total, totalGastos, benefi
   doc.setFont('helvetica', 'bold')
   doc.text('Resumen del mes', 14, 48)
 
-  const { porFecha, gastosPorFecha, fechas } = agruparDatos(registros, gastos, efectivo)
+  const { porFecha, gastosPorFecha, efectivoPorFecha, fechas } = agruparDatos(registros, gastos, dataEfectivo)
 
   autoTable(doc, {
     startY: 52,
     head: [['Fecha', 'Taxímetro', 'FreeNow', 'Uber', 'Total día', 'Efectivo', 'Gastos']],
-    body: tablaBody(porFecha, gastosPorFecha, fechas, efectivo),
+    body: tablaBody(porFecha, gastosPorFecha, efectivoPorFecha, fechas),
     foot: tablaFoot(registros, total, efectivo, totalGastos),
     ...estiloTabla,
   })
@@ -124,7 +130,7 @@ export function exportarPDF(fecha, registros, gastos, total, totalGastos, benefi
 }
 
 // ─── PDF SEMANAL ───────────────────────────────────────────
-export function exportarPDFSemana(fechaRef, registros, gastos, total, totalGastos, beneficioNeto, efectivo = 0, porcentaje = 45) {
+export function exportarPDFSemana(fechaRef, registros, gastos, total, totalGastos, beneficioNeto, efectivo = 0, porcentaje = 45, dataEfectivo = []) {
   const doc = new jsPDF()
   const inicio = startOfWeek(new Date(fechaRef + 'T00:00:00'), { weekStartsOn: 1 })
   const fin = endOfWeek(new Date(fechaRef + 'T00:00:00'), { weekStartsOn: 1 })
@@ -145,12 +151,12 @@ export function exportarPDFSemana(fechaRef, registros, gastos, total, totalGasto
   doc.setFont('helvetica', 'bold')
   doc.text('Resumen de la semana', 14, 48)
 
-  const { porFecha, gastosPorFecha, fechas } = agruparDatos(registros, gastos, efectivo)
+  const { porFecha, gastosPorFecha, efectivoPorFecha, fechas } = agruparDatos(registros, gastos, dataEfectivo)
 
   autoTable(doc, {
     startY: 52,
     head: [['Fecha', 'Taxímetro', 'FreeNow', 'Uber', 'Total día', 'Efectivo', 'Gastos']],
-    body: tablaBody(porFecha, gastosPorFecha, fechas, efectivo),
+    body: tablaBody(porFecha, gastosPorFecha, efectivoPorFecha, fechas),
     foot: tablaFoot(registros, total, efectivo, totalGastos),
     ...estiloTabla,
   })
@@ -173,10 +179,10 @@ export function exportarPDFSemana(fechaRef, registros, gastos, total, totalGasto
 }
 
 // ─── EXCEL MENSUAL ─────────────────────────────────────────
-export function exportarExcel(fecha, registros, gastos, total, totalGastos, beneficioNeto, efectivo = 0, porcentaje = 45) {
+export function exportarExcel(fecha, registros, gastos, total, totalGastos, beneficioNeto, efectivo = 0, porcentaje = 45, dataEfectivo = []) {
   const wb = XLSX.utils.book_new()
   const mesStr = format(new Date(fecha + 'T00:00:00'), "MMMM yyyy", { locale: es })
-  const { porFecha, gastosPorFecha, fechas } = agruparDatos(registros, gastos, efectivo)
+  const { porFecha, gastosPorFecha, efectivoPorFecha, fechas } = agruparDatos(registros, gastos, dataEfectivo)
 
   const data = [
     [`TaxiBill — Informe ${mesStr}`],
@@ -188,7 +194,7 @@ export function exportarExcel(fecha, registros, gastos, total, totalGastos, bene
       porFecha[f]?.freenow || 0,
       porFecha[f]?.uber || 0,
       porFecha[f]?.total || 0,
-      parseFloat((efectivo / Math.max(fechas.length, 1)).toFixed(2)),
+      efectivoPorFecha[f] || 0,
       gastosPorFecha[f] || 0,
     ]),
     [],
@@ -217,12 +223,12 @@ export function exportarExcel(fecha, registros, gastos, total, totalGastos, bene
 }
 
 // ─── EXCEL SEMANAL ─────────────────────────────────────────
-export function exportarExcelSemana(fechaRef, registros, gastos, total, totalGastos, beneficioNeto, efectivo = 0, porcentaje = 45) {
+export function exportarExcelSemana(fechaRef, registros, gastos, total, totalGastos, beneficioNeto, efectivo = 0, porcentaje = 45, dataEfectivo = []) {
   const wb = XLSX.utils.book_new()
   const inicio = startOfWeek(new Date(fechaRef + 'T00:00:00'), { weekStartsOn: 1 })
   const fin = endOfWeek(new Date(fechaRef + 'T00:00:00'), { weekStartsOn: 1 })
   const semanaStr = `${format(inicio, "d MMM", { locale: es })} – ${format(fin, "d MMM yyyy", { locale: es })}`
-  const { porFecha, gastosPorFecha, fechas } = agruparDatos(registros, gastos, efectivo)
+  const { porFecha, gastosPorFecha, efectivoPorFecha, fechas } = agruparDatos(registros, gastos, dataEfectivo)
 
   const data = [
     [`TaxiBill — Semana ${semanaStr}`],
@@ -234,7 +240,7 @@ export function exportarExcelSemana(fechaRef, registros, gastos, total, totalGas
       porFecha[f]?.freenow || 0,
       porFecha[f]?.uber || 0,
       porFecha[f]?.total || 0,
-      parseFloat((efectivo / Math.max(fechas.length, 1)).toFixed(2)),
+      efectivoPorFecha[f] || 0,
       gastosPorFecha[f] || 0,
     ]),
     [],

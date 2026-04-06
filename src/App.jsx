@@ -38,24 +38,27 @@ function Menu({ onClose, oscuro, toggleOscuro, logout }) {
       fecha = format(fechaSemana, 'yyyy-MM-dd')
     }
 
-    const [{ data: registros }, { data: gastos }, { data: dataEfectivo }] = await Promise.all([
-      supabase.from('registros').select('*').gte('fecha', inicio).lte('fecha', fin),
-      supabase.from('gastos').select('*').gte('fecha', inicio).lte('fecha', fin),
-      supabase.from('efectivo_dia').select('*').gte('fecha', inicio).lte('fecha', fin),
-    ])
+   const { data: { session } } = await supabase.auth.getSession()
+const user_id = session?.user?.id
+
+const [{ data: registros }, { data: gastos }, { data: dataEfectivo }] = await Promise.all([
+  supabase.from('registros').select('*').eq('user_id', user_id).gte('fecha', inicio).lte('fecha', fin),
+  supabase.from('gastos').select('*').eq('user_id', user_id).gte('fecha', inicio).lte('fecha', fin),
+  supabase.from('efectivo_dia').select('*').eq('user_id', user_id).gte('fecha', inicio).lte('fecha', fin),
+])
 
     const total = (registros || []).reduce((acc, r) => acc + parseFloat(r.importe), 0)
-    const totalGastos = (gastos || []).reduce((acc, g) => acc + parseFloat(g.importe), 0)
-    const beneficioNeto = total - totalGastos
-    const efectivoTotal = (dataEfectivo || []).reduce((acc, e) => acc + parseFloat(e.importe), 0)
+const totalGastos = (gastos || []).reduce((acc, g) => acc + parseFloat(g.importe), 0)
+const beneficioNeto = total - totalGastos
+const efectivoTotal = (dataEfectivo || []).reduce((acc, e) => acc + parseFloat(e.importe), 0)
 
-    if (periodo === 'mes') {
-      if (tipo === 'pdf') exportarPDF(fecha, registros || [], gastos || [], total, totalGastos, beneficioNeto, efectivoTotal, porcentaje)
-      else exportarExcel(fecha, registros || [], gastos || [], total, totalGastos, beneficioNeto, efectivoTotal, porcentaje)
-    } else {
-      if (tipo === 'pdf') exportarPDFSemana(fecha, registros || [], gastos || [], total, totalGastos, beneficioNeto, efectivoTotal, porcentaje)
-      else exportarExcelSemana(fecha, registros || [], gastos || [], total, totalGastos, beneficioNeto, efectivoTotal, porcentaje)
-    }
+if (periodo === 'mes') {
+  if (tipo === 'pdf') exportarPDF(fecha, registros || [], gastos || [], total, totalGastos, beneficioNeto, efectivoTotal, porcentaje, dataEfectivo || [])
+  else exportarExcel(fecha, registros || [], gastos || [], total, totalGastos, beneficioNeto, efectivoTotal, porcentaje, dataEfectivo || [])
+} else {
+  if (tipo === 'pdf') exportarPDFSemana(fecha, registros || [], gastos || [], total, totalGastos, beneficioNeto, efectivoTotal, porcentaje, dataEfectivo || [])
+  else exportarExcelSemana(fecha, registros || [], gastos || [], total, totalGastos, beneficioNeto, efectivoTotal, porcentaje, dataEfectivo || [])
+}
 
     toast.success('Exportado correctamente')
     setExportando(false)

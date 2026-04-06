@@ -9,10 +9,14 @@ export async function sincronizar() {
 
   console.log(`Sincronizando ${pendientes.length} operaciones pendientes...`)
 
+  const { data: { session } } = await supabase.auth.getSession()
+  const user_id = session?.user?.id
+  if (!user_id) return
+
   for (const op of pendientes) {
     try {
       if (op.tipo === 'insertar_registro') {
-        const { data } = await supabase.from('registros').insert([op.datos]).select()
+        const { data } = await supabase.from('registros').insert([{ ...op.datos, user_id }]).select()
         if (data) {
           await guardarRegistroLocal(data[0])
           await eliminarPendiente(op.id)
@@ -32,7 +36,7 @@ export async function sincronizar() {
           await eliminarPendiente(op.id)
         }
       } else if (op.tipo === 'insertar_gasto') {
-        const { data } = await supabase.from('gastos').insert([op.datos]).select()
+        const { data } = await supabase.from('gastos').insert([{ ...op.datos, user_id }]).select()
         if (data) {
           await guardarGastoLocal(data[0])
           await eliminarPendiente(op.id)

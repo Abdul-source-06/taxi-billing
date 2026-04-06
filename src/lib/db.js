@@ -1,4 +1,5 @@
 import { openDB } from 'idb'
+import { supabase } from './supabase'
 
 const DB_NAME = 'taxilog'
 const DB_VERSION = 1
@@ -21,10 +22,17 @@ export async function getDB() {
   })
 }
 
+async function getUserId() {
+  const { data: { session } } = await supabase.auth.getSession()
+  return session?.user?.id ?? null
+}
+
 // Registros
 export async function getRegistrosLocal(fecha) {
   const db = await getDB()
-  return db.getAllFromIndex('registros', 'fecha', fecha)
+  const user_id = await getUserId()
+  const todos = await db.getAllFromIndex('registros', 'fecha', fecha)
+  return todos.filter(r => r.user_id === user_id)
 }
 
 export async function guardarRegistroLocal(registro) {
@@ -40,7 +48,9 @@ export async function eliminarRegistroLocal(id) {
 // Gastos
 export async function getGastosLocal(fecha) {
   const db = await getDB()
-  return db.getAllFromIndex('gastos', 'fecha', fecha)
+  const user_id = await getUserId()
+  const todos = await db.getAllFromIndex('gastos', 'fecha', fecha)
+  return todos.filter(g => g.user_id === user_id)
 }
 
 export async function guardarGastoLocal(gasto) {
