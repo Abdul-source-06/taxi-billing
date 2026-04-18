@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { useModoOscuro } from "../hooks/useModoOscuro";
+import { supabase } from "../lib/supabase";
 import { Moon, Sun, Bell, Target, User, ChevronRight, Check } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 
@@ -8,20 +9,58 @@ export default function Ajustes() {
   const { user, logout } = useAuth();
   const { oscuro, toggleOscuro } = useModoOscuro();
 
-  const [objetivo, setObjetivo] = useState(() => localStorage.getItem("objetivoDiario") || "");
+  const [objetivo, setObjetivo] = useState("");
   const [editandoObjetivo, setEditandoObjetivo] = useState(false);
   const [notificaciones, setNotificaciones] = useState(() => localStorage.getItem("notificaciones") === "true");
-  const [porcentajeVal, setPorcentajeVal] = useState(() => localStorage.getItem('porcentaje') || '45')
+  const [porcentajeVal, setPorcentajeVal] = useState("45");
+  const [cargando, setCargando] = useState(true);
 
-  function guardarPorcentaje() {
-    localStorage.setItem('porcentaje', porcentajeVal)
-    toast.success('Porcentaje guardado')
+useEffect(() => {
+  if (user) cargarConfiguracion();
+}, [user]);
+
+  async function cargarConfiguracion() {
+    const { data } = await supabase
+      .from("configuracion")
+      .select("porcentaje, objetivo_diario")
+      .eq("user_id", user.id)
+      .maybeSingle() 
+
+    
+  if (data) {
+    setPorcentajeVal(String(data.porcentaje ?? 45));
+    setObjetivo(String(data.objetivo_diario ?? ""));
+    localStorage.setItem("porcentaje", String(data.porcentaje ?? 45));
+    localStorage.setItem("objetivoDiario", String(data.objetivo_diario ?? ""));
+  }
+  setCargando(false);
+}
+
+  async function guardarPorcentaje() {
+    const { error } = await supabase
+      .from("configuracion")
+      .upsert({ user_id: user.id, porcentaje: parseFloat(porcentajeVal) }, { onConflict: "user_id" });
+
+    if (error) {
+      toast.error("Error al guardar");
+    } else {
+      localStorage.setItem("porcentaje", porcentajeVal);
+      toast.success("Porcentaje guardado");
+    }
   }
 
-  function guardarObjetivo() {
-    localStorage.setItem("objetivoDiario", objetivo);
-    setEditandoObjetivo(false);
-    toast.success("Objetivo guardado");
+  async function guardarObjetivo() {
+    const { error } = await supabase
+      .from("configuracion")
+      .upsert({ user_id: user.id, objetivo_diario: parseFloat(objetivo) || 0 }, { onConflict: "user_id" });
+
+    if (error) {
+      toast.error("Error al guardar");
+    } else {
+      localStorage.setItem("objetivoDiario", objetivo);
+      setEditandoObjetivo(false);
+      toast.success("Objetivo guardado");
+    }
   }
 
   async function toggleNotificaciones() {
@@ -43,7 +82,7 @@ export default function Ajustes() {
 
   function enviarNotificacionPrueba() {
     if (Notification.permission === "granted") {
-      new Notification("🚕 TaxiLog", {
+      new Notification("🚕 TaxiBill", {
         body: "Las notificaciones funcionan correctamente",
         icon: "/taxi.png",
       });
@@ -51,6 +90,12 @@ export default function Ajustes() {
       toast.error("Activa las notificaciones primero");
     }
   }
+
+  if (cargando) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <span className="text-4xl animate-bounce">🚕</span>
+    </div>
+  );
 
   return (
     <div className="p-4 max-w-lg mx-auto space-y-4">
@@ -196,7 +241,7 @@ export default function Ajustes() {
         )}
       </div>
 
-      <p className="text-center text-xs text-gray-300 dark:text-gray-600 pb-2">TaxiLog v1.0.0</p>
+      <p className="text-center text-xs text-gray-300 dark:text-gray-600 pb-2">TaxiBill v1.0.0</p>
     </div>
   );
 }
